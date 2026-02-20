@@ -64,34 +64,7 @@ kapt {
     }
 }
 
-// AUTOMATION: Run Python Training Script before Build
-tasks.register<Exec>("trainStockModel") {
-    // Only run if Python is available. If not, print warning but don't fail build.
-    isIgnoreExitValue = true 
-    
-    // Command: python scripts/train_stock_model.py
-    // Note: 'workingDir' is the subproject dir (app/), so we go up one level.
-    workingDir = file("..")
-    
-    if (org.gradle.internal.os.OperatingSystem.current().isWindows()) {
-        commandLine("python", "scripts/train_stock_model.py")
-    } else {
-        commandLine("python3", "scripts/train_stock_model.py")
-    }
-    
-    doLast {
-        if (executionResult.get().exitValue != 0) {
-            println("WARNING: Stock Model Training failed or Python not found. Using existing/placeholder model.")
-        } else {
-            println("SUCCESS: Stock Model Retrained and Updated.")
-        }
-    }
-}
 
-// Hook into preBuild
-tasks.named("preBuild") {
-    dependsOn("trainStockModel")
-}
 
 dependencies {
 

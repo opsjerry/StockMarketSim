@@ -16,11 +16,15 @@ import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 
+import kotlinx.coroutines.flow.first
+
 @HiltWorker
 class ModelUpdaterWorker @AssistedInject constructor(
     @Assisted private val context: Context,
     @Assisted params: WorkerParameters,
-    private val client: OkHttpClient
+    private val client: OkHttpClient,
+    private val simulationRepository: com.example.stockmarketsim.domain.repository.SimulationRepository,
+    private val logManager: com.example.stockmarketsim.data.manager.SimulationLogManager
 ) : CoroutineWorker(context, params) {
 
     private val TAG = "ModelUpdaterWorker"
@@ -30,9 +34,22 @@ class ModelUpdaterWorker @AssistedInject constructor(
     // We are pointing this to the latest metadata release on the GitHub 'main' branch
     private val OTA_METADATA_URL = "https://raw.githubusercontent.com/opsjerry/StockMarketSim/main/model_metadata.json"
 
+    private suspend fun broadcastLog(msg: String) {
+        try {
+            val simulations = simulationRepository.getSimulations().first()
+            val activeSims = simulations.filter { it.status == com.example.stockmarketsim.domain.model.SimulationStatus.ACTIVE }
+            activeSims.forEach { sim ->
+                logManager.log(sim.id, msg)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Checking for Multi-Factor ML Model OTA updates...")
+            broadcastLog("[INFO] 🤖 Auto-Pilot checking GitHub for new AI models...")
 
             // 1. Fetch Metadata
             val request = Request.Builder().url(OTA_METADATA_URL).build()
@@ -58,11 +75,13 @@ class ModelUpdaterWorker @AssistedInject constructor(
 
             if (latestVersion <= currentVersion) {
                 Log.d(TAG, "App is already using the latest model engine (v$currentVersion).")
+                broadcastLog("[INFO] ✨ Deep Neural Net (v$currentVersion) is up-to-date.")
                 return@withContext Result.success()
             }
 
             // 2. Download Model file securely to a temporary file
             Log.d(TAG, "Downloading newer model (v$latestVersion)...")
+            broadcastLog("[INFO] 📥 Downloading new Deep Neural Net (v$latestVersion)...")
             val modelRequest = Request.Builder().url(downloadUrl).build()
             val modelResponse = client.newCall(modelRequest).execute()
             
@@ -85,6 +104,7 @@ class ModelUpdaterWorker @AssistedInject constructor(
             if (downloadedSha256 != expectedSha256) {
                 Log.e(TAG, "CRITICAL: Model Checksum mismatch! Corrupted download or MITM attack.")
                 Log.e(TAG, "Expected: $expectedSha256 | Got: $downloadedSha256")
+                broadcastLog("[ERROR] ⚠️ OTA Download corrupted! Falling back to bundled model.")
                 tempFile.delete()
                 
                 // Discard the corrupted file. The StockPriceForecaster will safely
@@ -104,6 +124,7 @@ class ModelUpdaterWorker @AssistedInject constructor(
             prefs.edit().putInt("current_model_version", latestVersion).apply()
             
             Log.i(TAG, "✅ Multi-Factor ML Model OTA Update Successful! (v$currentVersion -> v$latestVersion)")
+            broadcastLog("[INFO] ✅ New AI Brain activated! Updated to v$latestVersion.")
             return@withContext Result.success()
 
         } catch (e: Exception) {
