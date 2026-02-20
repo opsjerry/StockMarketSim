@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Safe Zone is roughly 72x72 in the center -->
+    
+    <!-- Chart Line: Rising Trend -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M30,70 L45,55 L55,65 L78,42"
+        android:strokeWidth="5"
+        android:strokeColor="#4ADE80"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"/>
+        
+    <!-- Candle Stick Elements -->
+    <path
+        android:fillColor="#60A5FA"
+        android:pathData="M78,35 L78,45"
+        android:strokeWidth="3"
+        android:strokeColor="#60A5FA"
+        android:strokeLineCap="round"/>
+
+    <!-- Abstract 'S' or Shield shape container (optional, keeping it simple to chart) -->
+    <!-- Let's add a Circle Background for the logo mark itself within the icon -->
+    
+    <!-- Accent Dots -->
+    <path
+        android:pathData="M30,70 L30,70"
+        android:strokeWidth="8"
+        android:strokeColor="#4ADE80"
+        android:strokeLineCap="round"/>
+        
+    <path
+        android:pathData="M78,42 L78,42"
+        android:strokeWidth="8"
+        android:strokeColor="#4ADE80"
+        android:strokeLineCap="round"/>
+
+</vector>

@@ -1,0 +1,66 @@
+name: Continuous Training MLOps Pipeline
+
+# Run at midnight every Sunday, or manually via a button click
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  train-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Setup Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install Dependencies
+      run: |
+        pip install pandas numpy yfinance xgboost scikit-learn tzdata requests
+
+    - name: Run Data Ingestion
+      run: python ml_pipeline/data_ingestion.py
+
+    - name: Run Feature Engineering
+      run: python ml_pipeline/feature_engineering.py
+
+    - name: Train Multi-Factor Model
+      run: python ml_pipeline/model_training.py
+
+    - name: Generate OTA Metadata & SHA256 Checksum
+      run: |
+        # Generate SHA256 Hash of the compiled model
+        SHA=$(sha256sum app/src/main/assets/stock_model.tflite | awk '{ print $1 }')
+        VERSION=$(date +%Y%m%d) # Use YYYYMMDD as the integer version
+        
+        # Build the JSON file for the Android app's ModelUpdaterWorker
+        # We point directly to where the raw file will drop in the GitHub release
+        cat <<EOF > model_metadata.json
+        {
+          "version": $VERSION,
+          "download_url": "https://github.com/${{ github.repository }}/releases/download/v$VERSION/stock_model.tflite",
+          "sha256": "$SHA"
+        }
+        EOF
+
+    - name: Create Release & Upload Artifacts
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ env.VERSION }}
+        name: Multi-Factor Model Update (v${{ env.VERSION }})
+        body: |
+          Automated MLOps Pipeline Execution:
+          - Model Retrained on new Market Data
+          - SHA-256 Checksum Generated
+          - Triggered by GitHub Actions
+        files: |
+          app/src/main/assets/stock_model.tflite
+          model_metadata.json
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        VERSION: $(date +%Y%m%d)

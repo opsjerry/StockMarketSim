@@ -1,0 +1,115 @@
+package com.example.stockmarketsim.domain.model
+
+object StockUniverse {
+    const val BENCHMARK_INDEX = "^NSEI"
+
+    // A comprehensive list of major NSE stocks (NIFTY 50 + Next 50 + Midcaps)
+    val AllMarket = listOf(
+        // --- NIFTY 50 (Large Cap) ---
+        "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "AXISBANK.NS", "KOTAKBANK.NS", "BAJFINANCE.NS", "BAJAJFINSV.NS", 
+        "INDUSINDBK.NS", "BANKBARODA.NS", "PNB.NS", "IDFCFIRSTB.NS", "AUBANK.NS", "BANDHANBNK.NS",
+        "TCS.NS", "INFY.NS", "HCLTECH.NS", "WIPRO.NS", "TECHM.NS", "LTIM.NS", "PERSISTENT.NS", "COFORGE.NS", "MPHASIS.NS",
+        "RELIANCE.NS", "ONGC.NS", "BPCL.NS", "IOC.NS", "POWERGRID.NS", "NTPC.NS", "TATAPOWER.NS", "ADANIGREEN.NS", "ADANIPORTS.NS",
+        "MARUTI.NS", "BAJAJ-AUTO.NS", "EICHERMOT.NS", "HEROMOTOCO.NS", "TVSMOTOR.NS", "ASHOKLEY.NS",
+        "HINDUNILVR.NS", "ITC.NS", "NESTLEIND.NS", "BRITANNIA.NS", "TATACONSUM.NS", "MARICO.NS", "DABUR.NS", "GODREJCP.NS", "COLPAL.NS",
+        "SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "DIVISLAB.NS", "APOLLOHOSP.NS", "LUPIN.NS", "AUROPHARMA.NS",
+        "TATASTEEL.NS", "HINDALCO.NS", "JSWSTEEL.NS", "COALINDIA.NS", "VEDL.NS", "NMDC.NS",
+        "ULTRACEMCO.NS", "GRASIM.NS", "AMBUJACEM.NS", "ACC.NS", "SHREECEM.NS", "LT.NS", "SIEMENS.NS", "ABB.NS",
+        "TITAN.NS", "ASIANPAINT.NS", "BERGEPAINT.NS", "PIDILITIND.NS", "HAVELLS.NS", "NAUKRI.NS", "PAYTM.NS", "DLF.NS",
+        "INDIGO.NS", "BEL.NS", "HAL.NS", "IRCTC.NS", "DMART.NS", "JIOFIN.NS",
+
+        // --- NIFTY NEXT 50 & MIDCAPS (High Growth) ---
+        "SRF.NS", "ICICIPRULI.NS", "SBICARD.NS", "MUTHOOTFIN.NS", "PIIND.NS", 
+        "TATAELXSI.NS", "POLYCAB.NS", "ASTRAL.NS", "KPITTECH.NS", "LTTS.NS", 
+        "DEEPAKNTR.NS", "NAVINFLUOR.NS", "LALPATHLAB.NS", "SYNGENE.NS", 
+        "TRENT.NS", "PAGEIND.NS", "VBL.NS", "ABCAPITAL.NS", "FEDERALBNK.NS", 
+        "MAXHEALTH.NS", "FORTIS.NS", "OBEROIRLTY.NS", "PHOENIXLTD.NS", 
+        "PRESTIGE.NS", "APLAPOLLO.NS", "SUZLON.NS", "IDEA.NS",
+        "YESBANK.NS", "IDBI.NS", "UNIONBANK.NS", "CANBK.NS", "INDIANB.NS",
+        "BHEL.NS", "RECLTD.NS", "PFC.NS", "IRFC.NS", "RVNL.NS", "RAILTEL.NS",
+        "MAZDOCK.NS", "COCHINSHIP.NS", "GMRAIRPORT.NS", "ADANIENT.NS", "ADANIPOWER.NS",
+
+        // --- HIGH QUALITY SMALL CAPS (Fund Manager Selection) ---
+        // Financial Infra & niche players (High Alpha potential)
+        "CDSL.NS", "BSE.NS", "MCX.NS", "CAMS.NS", "ANGELONE.NS", "IEX.NS",
+        "KFINTECH.NS", "UTIAMC.NS", "CREDITACC.NS",
+        
+        // IT Niche
+        "CYIENT.NS", "ZENSARTECH.NS", "SONATSOFTW.NS", "HAPPSTMNDS.NS", "BSOFT.NS", "INTELLECT.NS",
+        
+        // Manufacturing & Engineering
+        "KEI.NS", "AIAENG.NS", "TIMKEN.NS", "SKFINDIA.NS", "SCHAEFFLER.NS", "GRINDWELL.NS", "CARBORUNIV.NS",
+        "ELGIEQUIP.NS", "TRITURBINE.NS", "KAYNES.NS", 
+        
+        // Chemicals & Pharma Niche
+        "ALKYLAMINE.NS", "FINEORG.NS", "CLEAN.NS", "JBCHEPHARM.NS", "NATCOPHARM.NS", "GLAND.NS",
+        
+        // Consumer & Building Materials
+        "KAJARIACER.NS", "CENTURYPLY.NS", "BLUESTARCO.NS", "VOLTAS.NS", "CROMPTON.NS", "WHIRLPOOL.NS",
+        "RELAXO.NS", "BATAINDIA.NS", "DEVYANI.NS", "SAPPHIRE.NS"
+    ).sorted()
+
+    val sectorMap = mapOf(
+        // Banks & Finance
+        "HDFCBANK.NS" to "FINANCE", "ICICIBANK.NS" to "FINANCE", "SBIN.NS" to "FINANCE", "AXISBANK.NS" to "FINANCE", 
+        "KOTAKBANK.NS" to "FINANCE", "BAJFINANCE.NS" to "FINANCE", "BAJAJFINSV.NS" to "FINANCE", "INDUSINDBK.NS" to "FINANCE", 
+        "BANKBARODA.NS" to "FINANCE", "PNB.NS" to "FINANCE", "IDFCFIRSTB.NS" to "FINANCE", "AUBANK.NS" to "FINANCE", 
+        "BANDHANBNK.NS" to "FINANCE", "MUTHOOTFIN.NS" to "FINANCE", "SBICARD.NS" to "FINANCE", "ICICIPRULI.NS" to "FINANCE",
+        "ABCAPITAL.NS" to "FINANCE", "FEDERALBNK.NS" to "FINANCE", "YESBANK.NS" to "FINANCE", "IDBI.NS" to "FINANCE",
+        "UNIONBANK.NS" to "FINANCE", "CANBK.NS" to "FINANCE", "INDIANB.NS" to "FINANCE", "RECLTD.NS" to "FINANCE",
+        "PFC.NS" to "FINANCE", "IRFC.NS" to "FINANCE", "JIOFIN.NS" to "FINANCE",
+        "CDSL.NS" to "FINANCE", "BSE.NS" to "FINANCE", "MCX.NS" to "FINANCE", "CAMS.NS" to "FINANCE", "ANGELONE.NS" to "FINANCE",
+        "IEX.NS" to "FINANCE", "KFINTECH.NS" to "FINANCE", "UTIAMC.NS" to "FINANCE", "CREDITACC.NS" to "FINANCE",
+
+        // IT Services
+        "TCS.NS" to "IT", "INFY.NS" to "IT", "HCLTECH.NS" to "IT", "WIPRO.NS" to "IT", "TECHM.NS" to "IT", "LTIM.NS" to "IT", 
+        "PERSISTENT.NS" to "IT", "COFORGE.NS" to "IT", "MPHASIS.NS" to "IT", "TATAELXSI.NS" to "IT", "KPITTECH.NS" to "IT",
+        "LTTS.NS" to "IT", "RAILTEL.NS" to "IT",
+        "CYIENT.NS" to "IT", "ZENSARTECH.NS" to "IT", "SONATSOFTW.NS" to "IT", "HAPPSTMNDS.NS" to "IT", "BSOFT.NS" to "IT", "INTELLECT.NS" to "IT",
+
+        // Energy, Oil & Power
+        "RELIANCE.NS" to "ENERGY", "ONGC.NS" to "ENERGY", "BPCL.NS" to "ENERGY", "IOC.NS" to "ENERGY", "POWERGRID.NS" to "ENERGY", 
+        "NTPC.NS" to "ENERGY", "TATAPOWER.NS" to "ENERGY", "ADANIGREEN.NS" to "ENERGY", "ADANIPORTS.NS" to "INFRA",
+        "COALINDIA.NS" to "ENERGY", "BHEL.NS" to "INFRA", "ADANIENT.NS" to "INFRA", "ADANIPOWER.NS" to "ENERGY", "SUZLON.NS" to "ENERGY",
+
+        // Auto
+        "MARUTI.NS" to "AUTO", "BAJAJ-AUTO.NS" to "AUTO", "EICHERMOT.NS" to "AUTO", "HEROMOTOCO.NS" to "AUTO", 
+        "TVSMOTOR.NS" to "AUTO", "ASHOKLEY.NS" to "AUTO",
+
+        // FMCG & Consumer
+        "HINDUNILVR.NS" to "FMCG", "ITC.NS" to "FMCG", "NESTLEIND.NS" to "FMCG", "BRITANNIA.NS" to "FMCG", 
+        "TATACONSUM.NS" to "FMCG", "MARICO.NS" to "FMCG", "DABUR.NS" to "FMCG", "GODREJCP.NS" to "FMCG", 
+        "COLPAL.NS" to "FMCG", "TITAN.NS" to "CONSUMER", "ASIANPAINT.NS" to "CONSUMER", "BERGEPAINT.NS" to "CONSUMER",
+        "PIDILITIND.NS" to "CONSUMER", "HAVELLS.NS" to "CONSUMER", "VBL.NS" to "FMCG", "TRENT.NS" to "CONSUMER",
+        "PAGEIND.NS" to "CONSUMER", "DMART.NS" to "CONSUMER",
+        "KAJARIACER.NS" to "CONSUMER", "CENTURYPLY.NS" to "CONSUMER", "BLUESTARCO.NS" to "CONSUMER", "VOLTAS.NS" to "CONSUMER",
+        "CROMPTON.NS" to "CONSUMER", "WHIRLPOOL.NS" to "CONSUMER", "RELAXO.NS" to "CONSUMER", "BATAINDIA.NS" to "CONSUMER",
+        "DEVYANI.NS" to "FMCG", "SAPPHIRE.NS" to "FMCG",
+
+        // Pharma & Healthcare
+        "SUNPHARMA.NS" to "PHARMA", "DRREDDY.NS" to "PHARMA", "CIPLA.NS" to "PHARMA", "DIVISLAB.NS" to "PHARMA", 
+        "APOLLOHOSP.NS" to "PHARMA", "LUPIN.NS" to "PHARMA", "AUROPHARMA.NS" to "PHARMA", "PIIND.NS" to "CHEM",
+        "DEEPAKNTR.NS" to "CHEM", "NAVINFLUOR.NS" to "CHEM", "LALPATHLAB.NS" to "PHARMA", "SYNGENE.NS" to "PHARMA",
+        "MAXHEALTH.NS" to "PHARMA", "FORTIS.NS" to "PHARMA",
+        "ALKYLAMINE.NS" to "CHEM", "FINEORG.NS" to "CHEM", "CLEAN.NS" to "CHEM", "JBCHEPHARM.NS" to "PHARMA", 
+        "NATCOPHARM.NS" to "PHARMA", "GLAND.NS" to "PHARMA",
+
+        // Metals & Mining
+        "TATASTEEL.NS" to "METAL", "HINDALCO.NS" to "METAL", "JSWSTEEL.NS" to "METAL", "VEDL.NS" to "METAL", 
+        "NMDC.NS" to "METAL", "APLAPOLLO.NS" to "METAL",
+
+        // Infra, Cement & Defense & Eng
+        "ULTRACEMCO.NS" to "CEMENT", "GRASIM.NS" to "CEMENT", "AMBUJACEM.NS" to "CEMENT", "ACC.NS" to "CEMENT", 
+        "SHREECEM.NS" to "CEMENT", "LT.NS" to "INFRA", "SIEMENS.NS" to "INFRA", "ABB.NS" to "INFRA",
+        "BEL.NS" to "DEFENSE", "HAL.NS" to "DEFENSE", "MAZDOCK.NS" to "DEFENSE", "COCHINSHIP.NS" to "DEFENSE",
+        "KEI.NS" to "INFRA", "AIAENG.NS" to "INFRA", "TIMKEN.NS" to "INFRA", "SKFINDIA.NS" to "INFRA", 
+        "SCHAEFFLER.NS" to "INFRA", "GRINDWELL.NS" to "INFRA", "CARBORUNIV.NS" to "INFRA",
+        "ELGIEQUIP.NS" to "INFRA", "TRITURBINE.NS" to "INFRA", "KAYNES.NS" to "INFRA",
+
+        // Others
+        "NAUKRI.NS" to "TECH", "PAYTM.NS" to "TECH", "DLF.NS" to "REALTY", "INDIGO.NS" to "TRAVEL", 
+        "IRCTC.NS" to "TRAVEL", "OBEROIRLTY.NS" to "REALTY", "PHOENIXLTD.NS" to "REALTY", 
+        "PRESTIGE.NS" to "REALTY", "GMRAIRPORT.NS" to "INFRA", "RVNL.NS" to "INFRA", "IDEA.NS" to "TELECOM",
+        "POLYCAB.NS" to "INFRA", "ASTRAL.NS" to "INFRA"
+    )
+}
