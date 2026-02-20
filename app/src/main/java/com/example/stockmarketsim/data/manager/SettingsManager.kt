@@ -14,7 +14,6 @@ class SettingsManager @Inject constructor(
     companion object {
         private const val KEY_ALPHA_VANTAGE_API = "alpha_vantage_api_key"
         private const val KEY_INDIAN_API = "indian_api_key"
-        private const val KEY_MOCK_DATA = "force_mock_data"
     }
 
     var alphaVantageApiKey: String
@@ -25,7 +24,4 @@ class SettingsManager @Inject constructor(
         get() = prefs.getString(KEY_INDIAN_API, "") ?: ""
         set(value) = prefs.edit().putString(KEY_INDIAN_API, value).apply()
 
-    var isMockDataEnabled: Boolean
-        get() = prefs.getBoolean(KEY_MOCK_DATA, false)
-        set(value) = prefs.edit().putBoolean(KEY_MOCK_DATA, value).apply()
 }

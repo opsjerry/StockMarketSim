@@ -24,7 +24,6 @@ fun SettingsScreen(
 ) {
     val apiKey by viewModel.apiKey.collectAsState()
     val indianApiKey by viewModel.indianApiKey.collectAsState()
-    val isMockDataEnabled by viewModel.isMockDataEnabledBool.collectAsState()
 
     // Zerodha State
     val zerodhaApiKey by viewModel.zerodhaApiKey.collectAsState()
@@ -144,28 +143,7 @@ fun SettingsScreen(
             // --- DATA PREFERENCES ---
             SettingsSectionHeader("Data Preferences")
             
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Force Mock Data", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = "Use simulated data instead of fetching from Yahoo.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = isMockDataEnabled,
-                    onCheckedChange = { viewModel.updateMockData(it) }
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
+
 
             // Data Management Link
              Row(
@@ -288,7 +266,7 @@ fun AboutDialog(onDismiss: () -> Unit) {
                 // Deep Learning
                 Text("🧠 Deep Learning Forecasts", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 Text(
-                    "TensorFlow Lite LSTM model predicts T+1 log-returns based on 60-day price sequences.",
+                    "Native TensorFlow Keras Deep Neural Network predicts T+1 success probabilities based on 6 daily tabular features.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -325,6 +303,15 @@ fun AboutDialog(onDismiss: () -> Unit) {
                 Text("✅ Robustness Upgrade (v2.5)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 Text(
                     "Comprehensive 166-point regression test suite covers all domain logic. Fixed critical bugs in Backtester return calculation, aligned Benchmark data, and standardized ATR risk parameters per Expert Panel review.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Phase 16: Deep Neural Net Migration
+                Text("🤖 TensorFlow Lite Native Engine (v2.6)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text(
+                    "Migrated Machine Learning architecture from XGBoost to Native Keras Deep Neural Networks for perfect zero-allocation TFLite integration and optimized 24-byte payload mapping.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

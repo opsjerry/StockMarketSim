@@ -133,11 +133,11 @@ Capital preservation is the mathematically optimal path to long-term growth.
 | **52-Week Breakout** | Trend | Strong Bull | Price breaks 250-day high (needs 365-day data) |
 | **Hybrid Models** | Multi-Factor | Mixed | Momentum + RSI < 65 Filter (Best of both) |
 | **Safe Haven** | Smart Beta | Uncertain | Low Volatility Anomaly (inverse-vol weighted) |
-| **Neural Net (LSTM)** | AI | Non-Linear | Deep Learning prediction (TensorFlow) |
+| **Deep Neural Net** | AI | Non-Linear | Keras Multi-Factor pattern recognition (TensorFlow) |
 
 ---
 
-> *Updated: 18 Feb 2026 - v2.6: Data Integrity (Adjusted Close) & Performance (O(N) MACD).*
+> *Updated: 20 Feb 2026 - v2.6: Migrated Machine Learning Pipeline to Native Keras TFLite Engine.*
 
 ---
 

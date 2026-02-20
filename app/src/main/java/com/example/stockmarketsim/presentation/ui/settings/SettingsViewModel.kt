@@ -24,9 +24,6 @@ class SettingsViewModel @Inject constructor(
     private val _indianApiKey = MutableStateFlow(settingsManager.indianApiKey)
     val indianApiKey: StateFlow<String> = _indianApiKey
 
-    private val _isMockDataEnabled = MutableStateFlow(settingsManager.isMockDataEnabled)
-    val isMockDataEnabledBool: StateFlow<Boolean> = _isMockDataEnabled
-
     // Dynamic Universe
     val activeUniverse = stockRepository.getActiveUniverse()
     
@@ -41,14 +38,9 @@ class SettingsViewModel @Inject constructor(
         _indianApiKey.value = newKey
     }
 
-    fun updateMockData(enabled: Boolean) {
-        _isMockDataEnabled.value = enabled
-    }
-
     fun saveSettings() {
         settingsManager.alphaVantageApiKey = _apiKey.value
         settingsManager.indianApiKey = _indianApiKey.value
-        settingsManager.isMockDataEnabled = _isMockDataEnabled.value
     }
 
     // --- Zerodha Configuration ---
