@@ -22,7 +22,7 @@ class SettingsManager @Inject constructor(
         set(value) = prefs.edit().putString(KEY_ALPHA_VANTAGE_API, value).apply()
 
     var indianApiKey: String
-        get() = prefs.getString(KEY_INDIAN_API, "sk-live-Oo1mYkKJG5aMxtdpkRmEG7bzfWuGtTPCWD2wCyn7") ?: "sk-live-Oo1mYkKJG5aMxtdpkRmEG7bzfWuGtTPCWD2wCyn7"
+        get() = prefs.getString(KEY_INDIAN_API, "") ?: ""
         set(value) = prefs.edit().putString(KEY_INDIAN_API, value).apply()
 
     var isMockDataEnabled: Boolean

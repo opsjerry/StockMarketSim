@@ -24,12 +24,16 @@ jobs:
         pip install pandas numpy yfinance xgboost scikit-learn tzdata requests
 
     - name: Run Data Ingestion
+      env:
+        INDIANAPI_KEY: ${{ secrets.INDIANAPI_KEY }}
       run: python ml_pipeline/data_ingestion.py
 
     - name: Run Feature Engineering
       run: python ml_pipeline/feature_engineering.py
 
     - name: Train Multi-Factor Model
+      env:
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       run: python ml_pipeline/model_training.py
 
     - name: Generate OTA Metadata & SHA256 Checksum

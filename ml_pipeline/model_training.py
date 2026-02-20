@@ -1,5 +1,7 @@
 import pandas as pd
-import xgboost as xgb
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, classification_report
 import matplotlib.pyplot as plt
@@ -14,7 +16,7 @@ MODEL_DIR = os.path.join("..", "app", "src", "main", "assets")
 def setup_directories():
     os.makedirs(MODEL_DIR, exist_ok=True)
 
-def train_xgboost_model():
+def train_keras_model():
     print("--- Starting Phase 2: Model Training ---")
     data_path = os.path.join(PROCESSED_DIR, "master_training_data.csv")
     
@@ -42,8 +44,11 @@ def train_xgboost_model():
         
         # In a real cloud environment (GitHub Actions/AWS Lambda), this webhook sends 
         # a notification directly to your engineering team's Slack or Discord channel.
-        # webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
-        webhook_url = "https://discord.com/api/webhooks/1474394870029222000/NzERDjzAZEIrR8dwjnfLEn6g81y6Q_-NtIlZQz5Xev202hXTD-MhRCQh9uNbrpVoJ6Rt"
+        webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
+        
+        if not webhook_url:
+            print("Webhook URL not found in environment variables. Skipping alert.")
+            return
         
         try:
             # Discord uses 'content', Slack uses 'text'
@@ -66,49 +71,54 @@ def train_xgboost_model():
 
     print(f"Training set: {X_train.shape}, Test set: {X_test.shape}")
 
-    # Initialize XGBoost Classifier
-    model = xgb.XGBClassifier(
-        n_estimators=100,
-        max_depth=4,
-        learning_rate=0.1,
-        objective='binary:logistic',
-        eval_metric='auc',
-        random_state=42
+    # Initialize Keras Deep Learning Model
+    model = Sequential([
+        Dense(64, activation='relu', input_shape=(len(features),)),
+        BatchNormalization(),
+        Dropout(0.2),
+        Dense(32, activation='relu'),
+        BatchNormalization(),
+        Dropout(0.2),
+        Dense(16, activation='relu'),
+        Dense(1, activation='sigmoid')
+    ])
+
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        loss='binary_crossentropy',
+        metrics=['accuracy', tf.keras.metrics.Precision(name='precision')]
     )
 
     # Train the model
-    print("Training XGBoost...")
+    print("Training Keras Native Model (TensorFlow)...")
     model.fit(
         X_train, y_train,
-        eval_set=[(X_train, y_train), (X_test, y_test)],
-        verbose=10
+        validation_data=(X_test, y_test),
+        epochs=15,
+        batch_size=128,
+        verbose=1
     )
 
     # Evaluate
-    predictions = model.predict(X_test)
-    probs = model.predict_proba(X_test)[:, 1]
-
-    accuracy = accuracy_score(y_test, predictions)
-    precision = precision_score(y_test, predictions)
+    loss, accuracy, precision = model.evaluate(X_test, y_test, verbose=0)
 
     print("\n--- Model Evaluation ---")
     print(f"Accuracy:  {accuracy:.2%}")
     print(f"Precision: {precision:.2%} (Crucial for trading to avoid false positives)")
-    print("\nClassification Report:")
-    print(classification_report(y_test, predictions))
 
-    # Feature Importance
-    importance = model.feature_importances_
-    for i, f in enumerate(features):
-        print(f"Feature {f}: {importance[i]:.4f}")
-
-    # Export Model
-    model_export_path = os.path.join(MODEL_DIR, "multifactor_xgboost.json")
-    model.save_model(model_export_path)
-    print(f"\nModel exported to: {model_export_path}")
-    print("Note: In Android, you can use the XGBoost Java library or convert this to ONNX/TFLite.")
+    # Export Model to TFLite for Android
+    print("\nConverting model to TensorFlow Lite for Native Android Deployment...")
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    tflite_model = converter.convert()
+    
+    model_export_path = os.path.join(MODEL_DIR, "stock_model.tflite")
+    with open(model_export_path, "wb") as f:
+        f.write(tflite_model)
+        
+    print(f"\nTFLite Model exported to: {model_export_path}")
+    print("This file perfectly seamlessly pairs with Android's CachedStockPriceForecaster.kt (24 bytes input buffer).")
 
 if __name__ == "__main__":
     setup_directories()
-    train_xgboost_model()
+    train_keras_model()
     print("--- Training Complete ---")

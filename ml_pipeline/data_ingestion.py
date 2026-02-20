@@ -10,19 +10,37 @@ DATA_DIR = "raw_data"
 YFINANCE_DIR = os.path.join(DATA_DIR, "yfinance")
 INDIAN_API_DIR = os.path.join(DATA_DIR, "indianapi")
 YEARS_OF_DATA = 5
-INDIANAPI_KEY = os.getenv("INDIANAPI_KEY", "sk-live-Oo1mYkKJG5aMxtdpkRmEG7bzfWuGtTPCWD2wCyn7")
+# API Configuration
+INDIANAPI_KEY = os.environ.get("INDIANAPI_KEY")
 
 def setup_directories():
     os.makedirs(YFINANCE_DIR, exist_ok=True)
     os.makedirs(INDIAN_API_DIR, exist_ok=True)
 
+import re
+
 def get_nifty500_tickers():
-    # For demonstration, returning a small subset of highly liquid NSE stocks
-    # In production, this should read from the app's StockUniverse.kt or a full list
-    return [
-        "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
-        "HINDUNILVR.NS", "ITC.NS", "SBIN.NS", "BHARTIARTL.NS", "L&T.NS"
-    ]
+    """
+    Dynamically parses the Android app's StockUniverse.kt to ensure 100% 
+    parity between the MLOps pipeline and the mobile simulation engine.
+    """
+    print("Extracting Active Tickers from Android StockUniverse.kt...")
+    kt_file = os.path.join("app", "src", "main", "java", "com", "example", "stockmarketsim", "domain", "model", "StockUniverse.kt")
+    
+    try:
+        with open(kt_file, "r") as f:
+            content = f.read()
+    except Exception as e:
+        print(f"Error reading StockUniverse.kt: {e}")
+        # Fallback to defaults
+        return ["RELIANCE.NS", "TCS.NS"]
+        
+    # Extract all strings matching the NSE ticker pattern inside quotes
+    matches = re.findall(r'"([A-Z0-9-]+\.NS)"', content)
+    unique_tickers = sorted(list(set(matches)))
+    
+    print(f"Discovered {len(unique_tickers)} unique stocks for the ML Pipeline.")
+    return unique_tickers
 
 def download_yahoo_data(tickers):
     """

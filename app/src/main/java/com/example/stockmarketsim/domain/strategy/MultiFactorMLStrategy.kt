@@ -12,8 +12,8 @@ class MultiFactorMLStrategy(
     private val forecaster: IStockPriceForecaster,
     private val apiSource: IndianApiSource
 ) : Strategy {
-    override val id = "MULTI_FACTOR_XGBOOST"
-    override val name = "Multi-Factor ML (XGBoost)"
+    override val id = "MULTI_FACTOR_DNN"
+    override val name = "Multi-Factor ML (Deep Neural Net)"
     override val description = "Combines Price Action, Volatility, Sentiment, and Fundamentals into a unified probability model."
 
     override suspend fun calculateallocation(
@@ -57,7 +57,7 @@ class MultiFactorMLStrategy(
                 // Fetch fundamentals (cached/mapped)
                 val fundamentals = apiSource.getFundamentals(symbol)
                 
-                // 6 Features: [RSI_14, SMA_Ratio, ATR_Pct, Relative_Volume, PE_Ratio, Sentiment_Score]
+                // 6 Features mapped straight into TensorFlow: [RSI_14, SMA_Ratio, ATR_Pct, Relative_Volume, PE_Ratio, Sentiment_Score]
                 features[0] = rsi
                 features[1] = smaRatio
                 features[2] = atrPct
