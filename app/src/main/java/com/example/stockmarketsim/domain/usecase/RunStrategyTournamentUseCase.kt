@@ -67,7 +67,7 @@ class RunStrategyTournamentUseCase @Inject constructor(
         strategies.add(strategyProvider.getStrategy("REL_VOL_20_50")) // 5.0x Vol
 
         // G. Deep Learning (Re-enabled)
-        strategies.add(strategyProvider.getStrategy("DEEP_LEARNING_LSTM"))
+        strategies.add(strategyProvider.getStrategy("MULTI_FACTOR_DNN"))
 
         // 2. EXPERT REVIEW: Walk-Forward Validation
         // Instead of testing on the whole dataset (Optimization Bias), we split.

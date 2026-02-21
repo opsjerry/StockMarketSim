@@ -96,12 +96,32 @@ class RunDailySimulationUseCase @Inject constructor(
                 // OPTIMIZATION: Only run the Heavy Strategy Tournament when we are actually going to rebalance!
                 // This saves ~6 minutes of processing on Tue-Fri.
                 logManager.log(sim.id, "🏎️ Auto-Pilot: Running Strategy Tournament (Backtesting 40+ Strategies)...")
-                runStrategyTournamentUseCase(marketData, benchmarkHistory, sim.currentAmount, 0.20)
+                val tournamentResult = runStrategyTournamentUseCase(marketData, benchmarkHistory, sim.currentAmount, 0.20)
+                var bestStrategyId = tournamentResult.candidates.firstOrNull()?.strategyId ?: "SAFE_HAVEN"
+                
+                // QUANT VERDICT: Sticky ML Model (Anchor)
+                // If the current strategy is the AI, require the challenger to beat it by a significant margin (1.5x Alpha)
+                if (sim.strategyId == "MULTI_FACTOR_DNN" && bestStrategyId != "MULTI_FACTOR_DNN" && bestStrategyId != "SAFE_HAVEN") {
+                    val currentMlResult = tournamentResult.candidates.find { it.strategyId == "MULTI_FACTOR_DNN" }
+                    val topChallenger = tournamentResult.candidates.firstOrNull()
+                    
+                    if (currentMlResult != null && topChallenger != null) {
+                        val marginRequired = if (currentMlResult.alpha > 0) currentMlResult.alpha * 1.5 else currentMlResult.alpha + 2.0
+                        
+                        if (topChallenger.alpha < marginRequired) {
+                            logManager.log(sim.id, "🛡️ Quant Guard: Retaining ML Model. Challenger '${topChallenger.strategyId}' Alpha (${"%.2f".format(topChallenger.alpha)}%) didn't beat ML (${"%.2f".format(currentMlResult.alpha)}%) by required margin.")
+                            bestStrategyId = "MULTI_FACTOR_DNN"
+                        } else {
+                            logManager.log(sim.id, "⚠️ Regime Shift: Challenger '${topChallenger.strategyId}' Alpha (${"%.2f".format(topChallenger.alpha)}%) significantly outperformed ML Model (${"%.2f".format(currentMlResult.alpha)}%). Switching strategy.")
+                        }
+                    }
+                }
                 
                 // Reload simulation after strategy switch
                 // NOTE: The tournament updates the DB, so we must reload the simulation object to get the new strategyId
-                val updatedSim = simulationRepository.getSimulationById(sim.id) 
+                val updatedSim = simulationRepository.getSimulationById(sim.id)?.copy(strategyId = bestStrategyId) 
                 if (updatedSim != null) {
+                    simulationRepository.updateSimulation(updatedSim)
                     strategyId = updatedSim.strategyId // Update local variable
                 }
 

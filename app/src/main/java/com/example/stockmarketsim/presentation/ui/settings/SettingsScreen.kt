@@ -315,6 +315,16 @@ fun AboutDialog(onDismiss: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Phase 17: Quant Guard
+                Text("🛡️ Sticky ML Anchor & Circuit Breaker (v2.7)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text(
+                    "Implemented Quant logic to prevent strategy whiplash. The Deep Learning model acts as the portfolio anchor and requires any legacy challenger strategy to beat its Alpha by ≥ 1.5x before allowing a regime shift.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
                 
                 Divider(modifier = Modifier.padding(vertical = 12.dp))
                 

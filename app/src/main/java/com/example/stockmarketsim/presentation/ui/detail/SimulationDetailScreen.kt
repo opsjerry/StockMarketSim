@@ -245,7 +245,7 @@ fun SimulationDetailScreen(
                             }
                             
                             // PHASE 5: XGBoost Forecast Visualization
-                            if (simulation?.strategyId == "MULTI_FACTOR_XGBOOST") {
+                            if (simulation?.strategyId == "MULTI_FACTOR_DNN") {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Divider(color = Color(0xFF334155))
                                 Spacer(modifier = Modifier.height(12.dp))

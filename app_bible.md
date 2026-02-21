@@ -25,14 +25,12 @@ The core differentiator of this system is its ability to autonomously adapt to c
 *   **Impact**: A stock 40% above its SMA gets 4x the allocation of one 10% above, instead of the same 1/N.
 
 ### C. Auto-Pilot Switching (The Reflex)
-*   **Trigger**: If the Active Strategy's Alpha drops below **-5.0%** (underperforming benchmark significantly).
-*   **The "Apples-to-Apples" Fix (Quant Upgrade)**:
-    *   *Old Logic*: Compared Lifetime Alpha vs. Recent Alpha (Flawed).
-    *   *New Logic*: The engine re-evaluates the **Current Strategy** on the **Exact Same Test Window** as the tournament winner.
-    *   *Result*: A fair comparison of "Who is winning *right now*?"
-*   **Switch Condition**: New Strategy Alpha > Current Strategy Alpha + **5.0%**.
-    *   *Buffer*: A 5% buffer prevents "whipsawing" (changing strategies too often due to noise).
-    *   *Noise Filter*: Requires a minimum **20-day** evaluation window to be statistically significant.
+*   **Trigger**: The weekly Strategy Tournament dynamically backtests 40+ models to find the current market winner.
+*   **Switch Condition**: If a new strategy outperforms the active strategy on the Out-of-Sample Test Window, the simulation adopts the new winner.
+*   **🧠 The Quant Guard (Sticky ML Anchor)**: 
+    *   A special execution circuit breaker exists to protect the Deep Learning Model (`MULTI_FACTOR_DNN`).
+    *   To prevent whiplash during short-term market noise, if the active strategy is the ML model, any legacy challenger (e.g., Simple Momentum) MUST produce an Out-of-Sample Alpha **≥ 1.5x higher** to dethrone it.
+    *   If the challenger fails this strict margin, the ML model is retained as the portfolio anchor. This ensures regime shifts only occur when mathematically undeniable.
 
 ---
 

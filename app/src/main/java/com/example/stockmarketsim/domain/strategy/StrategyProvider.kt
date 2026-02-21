@@ -12,7 +12,7 @@ open class StrategyProvider @Inject constructor(
     open fun getStrategy(id: String): Strategy {
         return when {
             id == "NEWS_SENTIMENT_MOMENTUM" -> com.example.stockmarketsim.domain.strategy.NewsSentimentStrategy(stockRepository)
-            id == "MULTI_FACTOR_XGBOOST" -> com.example.stockmarketsim.domain.strategy.MultiFactorMLStrategy(forecaster, indianApiSource)
+            id == "MULTI_FACTOR_DNN" -> com.example.stockmarketsim.domain.strategy.MultiFactorMLStrategy(forecaster, indianApiSource)
             id.startsWith("MOMENTUM_SMA_") -> {
                 val period = id.substringAfter("MOMENTUM_SMA_").toIntOrNull() ?: 20
                 com.example.stockmarketsim.domain.strategy.ConfigurableMomentumStrategy(period)

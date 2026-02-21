@@ -61,7 +61,7 @@ class CreateSimulationViewModel @Inject constructor(
                     startDate = System.currentTimeMillis(),
                     targetReturnPercentage = targetReturn,
                     status = SimulationStatus.ACTIVE, // Immediately Active
-                    strategyId = "MULTI_FACTOR_XGBOOST" // Single Super Strategy
+                    strategyId = "MULTI_FACTOR_DNN" // Single Super Strategy
                 )
                 val simId = createSimulationUseCase(simulation)
                 
