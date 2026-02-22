@@ -22,16 +22,7 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r ml_pipeline/requirements.txt
-        pip install tensorflow matplotlib tzdata numpy
-
-    - name: Run Data Ingestion
-      env:
-        INDIANAPI_KEY: ${{ secrets.INDIANAPI_KEY }}
-      run: python ml_pipeline/data_ingestion.py
-
-    - name: Run Feature Engineering
-      run: python ml_pipeline/feature_engineering.py
+        pip install tensorflow numpy yfinance pandas
 
     - name: Train Multi-Factor Model
       env:
