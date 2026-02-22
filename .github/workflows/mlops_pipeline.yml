@@ -39,6 +39,7 @@ jobs:
         # Generate SHA256 Hash of the compiled model
         SHA=$(sha256sum app/src/main/assets/stock_model.tflite | awk '{ print $1 }')
         VERSION=$(date +%Y%m%d).${{ github.run_number }} # Use YYYYMMDD.RUN_NUMBER as the version
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
         
         # Build the JSON file for the Android app's ModelUpdaterWorker
         # We point directly to where the raw file will drop in the GitHub release
@@ -63,6 +64,3 @@ jobs:
         files: |
           app/src/main/assets/stock_model.tflite
           model_metadata.json
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        VERSION: $(date +%Y%m%d).${{ github.run_number }}
