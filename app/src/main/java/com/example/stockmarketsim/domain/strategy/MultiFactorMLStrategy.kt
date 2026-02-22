@@ -23,60 +23,40 @@ class MultiFactorMLStrategy(
     ): Map<String, Double> = coroutineScope {
         val selected = mutableListOf<Pair<String, Double>>()
 
-        // Pre-allocate zero-allocation arrays for TechnicalIndicators
-        val closes = DoubleArray(250)
-        val highs = DoubleArray(250)
-        val lows = DoubleArray(250)
-        val volumes = DoubleArray(250)
-        val features = DoubleArray(6)
-
         val deferredResults = candidates.map { symbol ->
             async {
                 val history = marketData[symbol] ?: return@async null
                 val currentIdx = cursors[symbol] ?: return@async null
                 
-                // Need at least 200 days for SMA_200
-                if (currentIdx < 200) return@async null
+                // Need at least 61 days for 60 log returns
+                if (currentIdx < 61) return@async null
                 
-                // Copy data to primitive arrays (zero-allocation inner loops)
-                val startIdx = currentIdx - 200
-                for (i in 0..200) {
-                    val q = history[startIdx + i]
-                    closes[i] = q.close
-                    highs[i] = q.high
-                    lows[i] = q.low
-                    volumes[i] = q.volume.toDouble()
+                // Allocate features array PER coroutine to ensure thread safety
+                val features = DoubleArray(60)
+                
+                // Generate 60-day Log Return Sequence: ln(P_t / P_{t-1})
+                val startIdx = currentIdx - 60
+                for (i in 0 until 60) {
+                    val p_t = history[startIdx + i + 1].close
+                    val p_prev = history[startIdx + i].close
+                    features[i] = kotlin.math.ln(p_t / p_prev)
                 }
                 
-                val endIdx = 201
-                val rsi = TechnicalIndicators.calculateRsiZeroAlloc(closes, endIdx, 14)
-                val smaRatio = TechnicalIndicators.calculateSmaRatioZeroAlloc(closes, endIdx, 50, 200)
-                val atrPct = TechnicalIndicators.calculateAtrPctZeroAlloc(highs, lows, closes, endIdx, 14)
-                val relVol = TechnicalIndicators.calculateRelativeVolumeZeroAlloc(volumes, endIdx, 20)
-                
-                // Fetch fundamentals (cached/mapped)
+                // Basic Fundamentals for logging context
                 val fundamentals = apiSource.getFundamentals(symbol)
                 
-                // 6 Features mapped straight into TensorFlow: [RSI_14, SMA_Ratio, ATR_Pct, Relative_Volume, PE_Ratio, Sentiment_Score]
-                features[0] = rsi
-                features[1] = smaRatio
-                features[2] = atrPct
-                features[3] = relVol
-                features[4] = fundamentals.peRatio
-                features[5] = fundamentals.sentimentScore
+                val predictedReturn = forecaster.predict(features, symbol, history[currentIdx].date)
                 
-                val probability = forecaster.predict(features, symbol, history[currentIdx].date)
+                if (predictedReturn.isNaN()) return@async null
                 
-                if (probability.isNaN()) return@async null
-                
-                // Phase 4: Risk Management - Absolute Conviction Threshold (60%)
-                if (probability < 0.60f) {
+                // Phase 4: Risk Management - 0.25% Breakeven Threshold for Regression Model
+                if (predictedReturn < 0.0025f) {
                     return@async null
                 }
                 
-                println("🧠 [$symbol] ML Conviction: ${"%.1f".format(probability * 100)}% | RSI: ${"%.1f".format(rsi)} | Sent: ${"%.1f".format(fundamentals.sentimentScore)}")
+                println("🧠 [$symbol] LSTM Predicted Return: ${"%.2f".format(predictedReturn * 100)}% | Sent: ${"%.1f".format(fundamentals.sentimentScore)}")
                 
-                symbol to probability.toDouble()
+                symbol to predictedReturn.toDouble()
             }
         }
 
@@ -85,7 +65,7 @@ class MultiFactorMLStrategy(
         }
 
         if (selected.isEmpty()) {
-            println("⚠️ [MultiFactorML] No trades met the 60% Conviction Threshold. Sitting in CASH.")
+            println("⚠️ [MultiFactorML] No trades met the 0.25% Breakeven Threshold. Sitting in CASH.")
             return@coroutineScope emptyMap()
         }
 

@@ -13,7 +13,15 @@ class EncryptedPreferences @Inject constructor(
 ) {
     private val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
 
-    private val sharedPreferences = EncryptedSharedPreferences.create(
+    private val sharedPreferences = try {
+        createEncryptedSharedPreferences()
+    } catch (e: Exception) {
+        // If keyset gets corrupted or deleted, clear the old preferences file and recreate it
+        context.getSharedPreferences("secure_prefs", Context.MODE_PRIVATE).edit().clear().apply()
+        createEncryptedSharedPreferences()
+    }
+
+    private fun createEncryptedSharedPreferences() = EncryptedSharedPreferences.create(
         "secure_prefs",
         masterKeyAlias,
         context,

@@ -50,23 +50,23 @@ class StockPriceForecaster @Inject constructor(
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, fileDescriptor.startOffset, fileDescriptor.declaredLength)
     }
 
-    // Reusable buffers to avoid allocation churn
-    // Input for XGBoost/MultiFactor: [1, 6] floats = 6 * 4 bytes = 24 bytes
-    // Features: [RSI_14, SMA_Ratio, ATR_Pct, Relative_Volume, PE_Ratio, Sentiment_Score]
-    private val inputBuffer = ByteBuffer.allocateDirect(4 * 6).order(ByteOrder.nativeOrder())
+    // Input for LSTM: [1, 60] floats = 60 * 4 bytes = 240 bytes
+    // Features: 60 days of log returns
+    private val inputBuffer = ByteBuffer.allocateDirect(4 * 60).order(ByteOrder.nativeOrder())
     // Output: [1, 1] float = 4 bytes
     private val outputBuffer = ByteBuffer.allocateDirect(4 * 1).order(ByteOrder.nativeOrder())
 
+    @Synchronized
     override fun predict(features: DoubleArray, symbol: String?, date: Long?): Float {
-        // Guard: Need exactly 6 features for the orthogonal XGBoost model
-        if (features.size != 6) return Float.NaN
+        // Guard: Need exactly 60 features for the LSTM model
+        if (features.size != 60) return Float.NaN
         if (interpreter == null) initialize()
         if (interpreter == null) return Float.NaN
 
         try {
             // 1. Direct Buffer Write (Zero Allocation)
             inputBuffer.rewind()
-            for (i in 0 until 6) {
+            for (i in 0 until 60) {
                 inputBuffer.putFloat(features[i].toFloat())
             }
 
@@ -79,13 +79,13 @@ class StockPriceForecaster @Inject constructor(
             // 3. Run Inference
             interpreter?.run(inputBuffer, outputBuffer)
             
-            // 4. Post-processing: XGBoost/Classification model outputs a probability (0.0 to 1.0)
+            // 4. Post-processing: LSTM outputs a single continuous value (predicted log return)
             outputBuffer.rewind()
-            val predictedProbability = outputBuffer.getFloat()
+            val predictedReturn = outputBuffer.getFloat()
             
-            if (predictedProbability.isNaN()) return Float.NaN
+            if (predictedReturn.isNaN()) return Float.NaN
 
-            return predictedProbability
+            return predictedReturn
             
         } catch (e: Exception) {
             e.printStackTrace()

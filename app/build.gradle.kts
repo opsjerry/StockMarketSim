@@ -128,5 +128,5 @@ dependencies {
     implementation("com.zerodhatech.kiteconnect:kiteconnect:3.5.1")
 
     // Security (EncryptedSharedPreferences)
-    implementation("androidx.security:security-crypto:1.0.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }
