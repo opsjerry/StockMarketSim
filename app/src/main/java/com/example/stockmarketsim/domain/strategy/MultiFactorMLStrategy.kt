@@ -54,8 +54,6 @@ class MultiFactorMLStrategy(
                     return@async null
                 }
                 
-                println("🧠 [$symbol] LSTM Predicted Return: ${"%.2f".format(predictedReturn * 100)}% | Sent: ${"%.1f".format(fundamentals.sentimentScore)}")
-                
                 symbol to predictedReturn.toDouble()
             }
         }
@@ -74,6 +72,14 @@ class MultiFactorMLStrategy(
         
         // Take Top 10 High-Conviction Picks
         val top10 = ranked.take(10)
+        
+        // Log only the Top 10 to avoid console spam
+        if (top10.isNotEmpty()) {
+            println("\n🚀 Top 10 MultiFactorML Picks for ${marketData.values.firstOrNull()?.get(cursors.values.firstOrNull() ?: 0)?.date?.let { java.text.SimpleDateFormat("yyyy-MM-dd").format(java.util.Date(it)) }}:")
+            top10.forEach { (sym, ret) ->
+                println("   🧠 [$sym] LSTM Predicted Return: ${"%.2f".format(ret * 100)}%")
+            }
+        }
         
         // Equal Weight Allocation
         val weight = 1.0 / top10.size
