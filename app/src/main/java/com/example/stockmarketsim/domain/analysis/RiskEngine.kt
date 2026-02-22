@@ -12,24 +12,25 @@ object RiskEngine {
 
     /**
      * Calculates the Average True Range (ATR) for a given history.
+     * Zero-allocation: uses only the last `period` true ranges via cursor math.
      */
     fun calculateATR(history: List<StockQuote>, period: Int = 14): Double {
         if (history.size < period + 1) return 0.0
         
-        val trueRanges = mutableListOf<Double>()
+        // Zero-allocation: compute ATR using only the last `period` true ranges
+        val startIdx = history.size - period
+        var atrSum = 0.0
         
-        for (i in 1 until history.size) {
+        for (i in startIdx until history.size) {
             val high = history[i].high
             val low = history[i].low
             val prevClose = history[i - 1].close
             
             val tr = max(high - low, max(abs(high - prevClose), abs(low - prevClose)))
-            trueRanges.add(tr)
+            atrSum += tr
         }
         
-        if (trueRanges.size < period) return 0.0
-        
-        return trueRanges.takeLast(period).average()
+        return atrSum / period
     }
 
     /**

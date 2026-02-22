@@ -148,10 +148,6 @@ class RunDailySimulationUseCase @Inject constructor(
                  logManager.log(sim.id, "⏩ Daily Update: Skipping Strategy Tournament (Runs on Mondays). checking stops/regime...")
             }
             
-            // Log for Skipped Tournament
-            if (!isRebalanceDay && !isFastStart) {
-                 logManager.log(sim.id, "⏩ Daily Update: Skipping Strategy Tournament (Runs on Mondays). checking stops/regime...")
-            }
 
             val currentPortfolioSnapshot = portfolio.associate { item ->
                 val quote = stockRepository.getStockQuote(item.symbol)

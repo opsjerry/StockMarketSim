@@ -28,7 +28,7 @@ object AppModule {
             AppDatabase::class.java,
             "stock_market_sim.db"
         )
-        .addMigrations(AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9)
+        .addMigrations(AppDatabase.MIGRATION_4_5, AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9, AppDatabase.MIGRATION_9_10)
         .fallbackToDestructiveMigration() // Enabled for robust dev builds
         .build()
     }
@@ -99,10 +99,20 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideFundamentalsCacheDao(
+        database: AppDatabase
+    ): com.example.stockmarketsim.data.local.dao.FundamentalsCacheDao {
+        return database.fundamentalsCacheDao()
+    }
+
+    @Provides
+    @Singleton
     fun provideIndianApiSource(
-        settingsManager: com.example.stockmarketsim.data.manager.SettingsManager
+        settingsManager: com.example.stockmarketsim.data.manager.SettingsManager,
+        fundamentalsCacheDao: com.example.stockmarketsim.data.local.dao.FundamentalsCacheDao,
+        yahooFinanceSource: com.example.stockmarketsim.data.remote.YahooFinanceSource
     ): com.example.stockmarketsim.data.remote.IndianApiSource {
-        return com.example.stockmarketsim.data.remote.IndianApiSource(settingsManager)
+        return com.example.stockmarketsim.data.remote.IndianApiSource(settingsManager, fundamentalsCacheDao, yahooFinanceSource)
     }
 
     @Provides

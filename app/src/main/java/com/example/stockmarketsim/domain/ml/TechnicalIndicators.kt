@@ -8,6 +8,10 @@ import kotlin.math.max
  * High-performance, zero-allocation technical indicator math designed for 
  * fast inner-loop execution during the simulation/tournament running across 165 stocks.
  * Complies with App Bible Section 5B (Zero-Allocation Architecture).
+ *
+ * TODO: These indicators are NOT currently used by the LSTM model.
+ * They were built in preparation for the Multi-Factor XGBoost upgrade (Phase 1).
+ * Wire these into the model input tensor when retraining with multi-factor features.
  */
 object TechnicalIndicators {
 

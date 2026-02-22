@@ -12,8 +12,8 @@ import com.example.stockmarketsim.data.local.entity.StockPriceEntity
 import com.example.stockmarketsim.data.local.entity.TransactionEntity
 
 @Database(
-    entities = [SimulationEntity::class, StockPriceEntity::class, PortfolioItemEntity::class, TransactionEntity::class, com.example.stockmarketsim.data.local.entity.SimulationHistoryEntity::class, com.example.stockmarketsim.data.local.entity.StockUniverseEntity::class, com.example.stockmarketsim.data.local.entity.PredictionEntity::class],
-    version = 9,
+    entities = [SimulationEntity::class, StockPriceEntity::class, PortfolioItemEntity::class, TransactionEntity::class, com.example.stockmarketsim.data.local.entity.SimulationHistoryEntity::class, com.example.stockmarketsim.data.local.entity.StockUniverseEntity::class, com.example.stockmarketsim.data.local.entity.PredictionEntity::class, com.example.stockmarketsim.data.local.entity.FundamentalsCacheEntity::class],
+    version = 10,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -23,6 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun simulationHistoryDao(): com.example.stockmarketsim.data.local.dao.SimulationHistoryDao
     abstract fun predictionDao(): com.example.stockmarketsim.data.local.dao.PredictionDao
+    abstract fun fundamentalsCacheDao(): com.example.stockmarketsim.data.local.dao.FundamentalsCacheDao
 
     companion object {
         val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
@@ -58,6 +59,13 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
                 // Create predictions table
                 database.execSQL("CREATE TABLE IF NOT EXISTS `predictions` (`symbol` TEXT NOT NULL, `date` INTEGER NOT NULL, `predictedReturn` REAL NOT NULL, `modelVersion` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, PRIMARY KEY(`symbol`, `date`, `modelVersion`))")
+            }
+        }
+
+        val MIGRATION_9_10 = object : androidx.room.migration.Migration(9, 10) {
+            override fun migrate(database: androidx.sqlite.db.SupportSQLiteDatabase) {
+                // Create fundamentals_cache table
+                database.execSQL("CREATE TABLE IF NOT EXISTS `fundamentals_cache` (`symbol` TEXT NOT NULL, `peRatio` REAL NOT NULL, `roe` REAL NOT NULL, `debtToEquity` REAL NOT NULL, `marketCap` REAL NOT NULL, `sentimentScore` REAL NOT NULL, `source` TEXT NOT NULL, `fetchTimestamp` INTEGER NOT NULL, PRIMARY KEY(`symbol`))")
             }
         }
     }

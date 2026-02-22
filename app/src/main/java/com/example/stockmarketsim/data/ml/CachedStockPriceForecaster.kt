@@ -12,7 +12,7 @@ class CachedStockPriceForecaster @Inject constructor(
 ) : IStockPriceForecaster {
 
     // HARDCODED VERSION: Update this string when model.tflite is replaced!
-    private val CURRENT_MODEL_VERSION = "v3_lstm_seq60"
+    private val CURRENT_MODEL_VERSION = "v4_multifactor_seq64"
 
     override fun initialize() {
         realForecaster.initialize()

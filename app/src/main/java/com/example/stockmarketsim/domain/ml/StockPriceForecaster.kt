@@ -50,36 +50,46 @@ class StockPriceForecaster @Inject constructor(
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, fileDescriptor.startOffset, fileDescriptor.declaredLength)
     }
 
-    // Input for LSTM: [1, 60] floats = 60 * 4 bytes = 240 bytes
-    // Features: 60 days of log returns
-    private val inputBuffer = ByteBuffer.allocateDirect(4 * 60).order(ByteOrder.nativeOrder())
+    // Dynamic input buffer — lazily allocated to match actual feature count
+    // Supports both 60 (LSTM log returns) and 64 (multi-factor: log returns + TA indicators)
+    private var inputBuffer: ByteBuffer? = null
+    private var currentFeatureCount = 0
     // Output: [1, 1] float = 4 bytes
     private val outputBuffer = ByteBuffer.allocateDirect(4 * 1).order(ByteOrder.nativeOrder())
 
+    private fun getOrCreateInputBuffer(featureCount: Int): ByteBuffer {
+        if (inputBuffer == null || currentFeatureCount != featureCount) {
+            inputBuffer = ByteBuffer.allocateDirect(4 * featureCount).order(ByteOrder.nativeOrder())
+            currentFeatureCount = featureCount
+        }
+        return inputBuffer!!
+    }
+
     @Synchronized
     override fun predict(features: DoubleArray, symbol: String?, date: Long?): Float {
-        // Guard: Need exactly 60 features for the LSTM model
-        if (features.size != 60) return Float.NaN
+        if (features.isEmpty()) return Float.NaN
         if (interpreter == null) initialize()
         if (interpreter == null) return Float.NaN
 
         try {
+            val buf = getOrCreateInputBuffer(features.size)
+            
             // 1. Direct Buffer Write (Zero Allocation)
-            inputBuffer.rewind()
-            for (i in 0 until 60) {
-                inputBuffer.putFloat(features[i].toFloat())
+            buf.rewind()
+            for (i in features.indices) {
+                buf.putFloat(features[i].toFloat())
             }
 
             // 2. Prepare Output Buffer
             outputBuffer.rewind()
             
             // Fix: Rewind Input Buffer to position 0 before inference!
-            inputBuffer.rewind()
+            buf.rewind()
 
             // 3. Run Inference
-            interpreter?.run(inputBuffer, outputBuffer)
+            interpreter?.run(buf, outputBuffer)
             
-            // 4. Post-processing: LSTM outputs a single continuous value (predicted log return)
+            // 4. Post-processing: model outputs a single continuous value (predicted log return)
             outputBuffer.rewind()
             val predictedReturn = outputBuffer.getFloat()
             

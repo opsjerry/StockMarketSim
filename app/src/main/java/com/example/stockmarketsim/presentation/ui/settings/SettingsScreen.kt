@@ -88,7 +88,7 @@ fun SettingsScreen(
             )
             
             Text(
-                text = "Required for Fundamental Ratios (P/E, Market Cap) & Market Sentiment.",
+                text = "Primary source for P/E, ROE, D/E, MarketCap & Sentiment. Falls back to Yahoo Finance if blank or rate-limited. 7-day Room cache.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 16.dp, end = 16.dp)
@@ -233,7 +233,7 @@ fun AboutDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { 
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text("📊 Intelligence Engine v2.4", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
+                Text("📊 Intelligence Engine v3.0", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
             }
         },
         text = {
@@ -324,16 +324,34 @@ fun AboutDialog(onDismiss: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Phase 18: Multi-Factor ML + API Integration
+                Text("🧬 Multi-Factor ML Architecture (v3.0)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text(
+                    "Upgraded the ML feature vector from 60 (log returns) to 64 inputs: RSI(14), SMA Ratio (50/200), ATR%(14), and Relative Volume(20) are now wired into the LSTM model alongside price data. Dynamic ByteBuffer eliminates model-shape rigidity.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text("📡 Smart Fundamentals Pipeline (v3.0)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text(
+                    "Real-time fundamentals from IndianAPI.in (P/E, ROE, D/E, MarketCap, Analyst Sentiment) with 1 req/sec throttle. Room-persisted 7-day cache. Yahoo Finance as automatic fallback. Zero mock data — stocks with no data from any source are skipped.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 
                 
                 Divider(modifier = Modifier.padding(vertical = 12.dp))
                 
                 Text("CORE SYSTEMS", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
                 Text("• 22+ Strategy Variants (Momentum, RSI, Bollinger, Volume, ML)", style = MaterialTheme.typography.bodySmall)
-                Text("• Quality Filter (ROE, D/E) + Signal-Proportional Sizing", style = MaterialTheme.typography.bodySmall)
+                Text("• 64-Feature Multi-Factor LSTM (Log Returns + 4 TA Indicators)", style = MaterialTheme.typography.bodySmall)
+                Text("• Real Fundamentals: IndianAPI.in → Yahoo Finance → Room Cache", style = MaterialTheme.typography.bodySmall)
                 Text("• Fee-Adjusted Tournament + Weekly Rebalancing", style = MaterialTheme.typography.bodySmall)
                 Text("• ATR Trailing Stops + 7% Hard Stop + 30% Sector Cap", style = MaterialTheme.typography.bodySmall)
-                Text("• Regime Filter (SMA-200 + Volatility + CPI)", style = MaterialTheme.typography.bodySmall)
+                Text("• Regime Filter (SMA-200 + Volatility + CPI) — Zero-Allocation", style = MaterialTheme.typography.bodySmall)
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("See full documentation in `app_bible.md`", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)

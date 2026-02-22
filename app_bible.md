@@ -75,11 +75,14 @@ Capital preservation is the mathematically optimal path to long-term growth.
 *   **Impact**: Reduces portfolio churn by ~80%, saving ~3-5% annually in transaction costs.
 
 ### G. Fundamental Quality Filter
-*   **Data Source**: Yahoo Finance `quoteSummary` API (Zerodha paid API as fallback when available).
+*   **Primary Source**: IndianAPI.in (`GET /stock?name={company}`) — provides P/E, ROE, D/E, MarketCap, and Analyst Sentiment.
+*   **Fallback Source**: Yahoo Finance `quoteSummary` API (free, no rate limit). Zerodha paid API ready when available.
+*   **Persistent Cache**: Room database with **7-day TTL**. Stale cache is preferred over no data.
+*   **Rate Limiting**: 1 request per second to IndianAPI.in. HTTP 429 triggers automatic Yahoo Finance fallback.
+*   **No Mock Data Policy**: If all sources fail and no cache exists, the stock is **skipped entirely** rather than using fabricated fundamentals.
 *   **Criteria**: ROE ≥ 12% **and** Debt/Equity ≤ 1.0.
 *   **Applied**: On Monday rebalance days only. Stocks with missing data pass (benefit of the doubt).
 *   **Purpose**: Prevents RSI and Bollinger Mean Reversion from buying "falling knives" — stocks that are cheap because fundamentals are deteriorating.
-*   **Caching**: 1-hour in-memory cache to avoid redundant API calls.
 
 ---
 
@@ -131,11 +134,11 @@ Capital preservation is the mathematically optimal path to long-term growth.
 | **52-Week Breakout** | Trend | Strong Bull | Price breaks 250-day high (needs 365-day data) |
 | **Hybrid Models** | Multi-Factor | Mixed | Momentum + RSI < 65 Filter (Best of both) |
 | **Safe Haven** | Smart Beta | Uncertain | Low Volatility Anomaly (inverse-vol weighted) |
-| **Deep Neural Net** | AI | Non-Linear | Keras Multi-Factor pattern recognition (TensorFlow) |
+| **Deep Neural Net** | AI | Non-Linear | Multi-Factor 64-feature LSTM (60 log returns + RSI, SMA Ratio, ATR%, RelVol) |
 
 ---
 
-> *Updated: 20 Feb 2026 - v2.6: Migrated Machine Learning Pipeline to Native Keras TFLite Engine.*
+> *Updated: 22 Feb 2026 - v3.1: Multi-Factor ML (64-feature), IndianAPI.in Live Data Pipeline, Zero-Mock Fundamentals.*
 
 ---
 
@@ -152,8 +155,8 @@ The simulation engine is computationally intensive. To prevent UI freezes (ANR) 
 *   **Core Principle**: **NEVER** allocate memory inside the simulation loop.
 *   **Implementation**:
     *   **Cursors**: Instead of slicing lists (`history.takeLast(20)`), we pass a `cursor` (int index) and read directly from the source list.
-    *   **Primitive Math**: All strategy indicators (SMA, RSI, Bollinger) are calculated using primitive `double` loops, avoiding `List<Double>` creation.
-    *   **ML Buffers**: The TFLite model (`StockPriceForecaster`) reuses a single `ByteBuffer` for all 100,000+ predictions, eliminating 99% of GC pressure.
+    *   **Primitive Math**: All strategy indicators (SMA, RSI, Bollinger) and the **RegimeFilter** (SMA-200, volatility) are calculated using primitive `double` loops, avoiding `List<Double>` creation.
+    *   **ML Buffers**: The TFLite model (`StockPriceForecaster`) uses a **dynamic ByteBuffer** that lazily adapts to the feature count (60 or 64), eliminating 99% of GC pressure.
 *   **Impact**: Garbage Collection (GC) pauses are reduced to negligible levels (<5ms), allowing the CPU to run full throttle on 4 threads without memory thrashing.
 
 ### C. M.A.C.D. & Indicator Optimization
@@ -163,5 +166,5 @@ The simulation engine is computationally intensive. To prevent UI freezes (ANR) 
 
 ---
 
-> *Last Updated: 19 Feb 2026 - v3.0: Zero-Allocation Engine & Parallel Processing.*
+> *Last Updated: 22 Feb 2026 - v3.1: Multi-Factor ML, IndianAPI.in Pipeline, Zero-Allocation RegimeFilter.*
 

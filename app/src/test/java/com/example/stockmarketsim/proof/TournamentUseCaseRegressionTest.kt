@@ -48,9 +48,14 @@ class TournamentUseCaseRegressionTest {
         object : IStockPriceForecaster { // SAFE: Dummy implementation
             override fun initialize() {}
             override fun predict(features: DoubleArray, symbol: String?, date: Long?): Float = 0f
+            override fun getModelVersion(): Int = 1
         },
         dummyRepo,
-        IndianApiSource(com.example.stockmarketsim.data.manager.SettingsManager(org.mockito.Mockito.mock(Context::class.java)))
+        IndianApiSource(
+            com.example.stockmarketsim.data.manager.SettingsManager(org.mockito.Mockito.mock(Context::class.java)),
+            org.mockito.Mockito.mock(com.example.stockmarketsim.data.local.dao.FundamentalsCacheDao::class.java),
+            org.mockito.Mockito.mock(com.example.stockmarketsim.data.remote.YahooFinanceSource::class.java)
+        )
     ) {
         override fun getStrategy(id: String): Strategy {
             // Return simple Momentum strategy for ALL requested IDs to ensure test stability
