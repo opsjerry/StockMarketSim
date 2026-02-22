@@ -65,9 +65,18 @@ class CreateSimulationViewModel @Inject constructor(
                 )
                 val simId = createSimulationUseCase(simulation)
                 
-                // Immediately start the intelligence engine
-                runDailySimulationUseCase()
+                // Detach the heavy backtest execution from the ViewModel's scope.
+                // This ensures the backtest runs to completion even if the user navigates away,
+                // and allows the UI to immediately pop back to the dashboard.
+                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        runDailySimulationUseCase()
+                    } catch (e: Exception) {
+                        android.util.Log.e("CreateSimulation", "Simulation execution failed", e)
+                    }
+                }
                 
+                // Navigate back immediately
                 onSuccess()
             } catch (e: Exception) {
                 onError(e.message ?: "Unknown error")

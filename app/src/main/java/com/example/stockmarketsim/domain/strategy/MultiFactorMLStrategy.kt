@@ -75,9 +75,10 @@ class MultiFactorMLStrategy(
         
         // Log only the Top 10 to avoid console spam
         if (top10.isNotEmpty()) {
-            println("\n🚀 Top 10 MultiFactorML Picks for ${marketData.values.firstOrNull()?.get(cursors.values.firstOrNull() ?: 0)?.date?.let { java.text.SimpleDateFormat("yyyy-MM-dd").format(java.util.Date(it)) }}:")
+            val version = forecaster.getModelVersion()
+            println("\n🚀 Top 10 MultiFactorML Picks (Model v$version) for ${marketData.values.firstOrNull()?.get(cursors.values.firstOrNull() ?: 0)?.date?.let { java.text.SimpleDateFormat("yyyy-MM-dd").format(java.util.Date(it)) }}:")
             top10.forEach { (sym, ret) ->
-                println("   🧠 [$sym] LSTM Predicted Return: ${"%.2f".format(ret * 100)}%")
+                println("   🧠 [$sym] LSTM (v$version) Predicted Return: ${"%.2f".format(ret * 100)}%")
             }
         }
         

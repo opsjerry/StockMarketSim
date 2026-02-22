@@ -54,11 +54,19 @@ class PortfolioRebalancer(
         val tempHoldings = currentHoldings.toMutableMap()
         val trades = mutableListOf<TradeAction>()
 
+        // 0. Normalize Target Allocations (To ensure we use 100% of intended deployed cash)
+        val rawSum = targetAllocations.values.sum()
+        val normalizedAllocations = if (rawSum > 0.0 && rawSum != 1.0) {
+            targetAllocations.mapValues { it.value / rawSum }
+        } else {
+            targetAllocations
+        }
+
         // 1. Pass: SELLS (Freex up cash first)
-        val allSymbols = (targetAllocations.keys + currentHoldings.keys).distinct().sorted()
+        val allSymbols = (normalizedAllocations.keys + currentHoldings.keys).distinct().sorted()
         
         for (symbol in allSymbols) {
-            val targetPct = targetAllocations[symbol] ?: 0.0
+            val targetPct = normalizedAllocations[symbol] ?: 0.0
             val marketPrice = currentPrices[symbol] ?: continue
             if (marketPrice <= 0) continue
 
@@ -73,7 +81,8 @@ class PortfolioRebalancer(
             // SELL if underweight or removed (Negative diff)
             if (diffVal < -minTradeValue && diffPct >= minAllocationChange) {
                 val sellValRaw = -diffVal
-                val sellQty = sellValRaw / marketPrice
+                val sellQty = kotlin.math.floor(sellValRaw / marketPrice)
+                if (sellQty <= 0) continue
                 
                 // Ensure we don't sell more than we have
                 val finalSellQty = if (sellQty > currentQty) currentQty else sellQty
@@ -114,7 +123,7 @@ class PortfolioRebalancer(
 
         // 2. Pass: BUYS
         for (symbol in allSymbols) {
-            val targetPct = targetAllocations[symbol] ?: 0.0
+            val targetPct = normalizedAllocations[symbol] ?: 0.0
             val marketPrice = currentPrices[symbol] ?: continue
             if (marketPrice <= 0) continue
 
@@ -149,7 +158,9 @@ class PortfolioRebalancer(
                 }
 
                 if (actualBuyVal > minTradeValue) {
-                    val buyQty = actualBuyVal / executedPrice
+                    val buyQty = kotlin.math.floor(actualBuyVal / executedPrice)
+                    if (buyQty <= 0) continue
+                    
                     val grossBuyAmount = buyQty * executedPrice
                     val actualCommission = grossBuyAmount * appliedCommission
                     val totalDeduction = grossBuyAmount + actualCommission

@@ -58,4 +58,8 @@ class CachedStockPriceForecaster @Inject constructor(
 
         return prediction
     }
+
+    override fun getModelVersion(): Int {
+        return realForecaster.getModelVersion()
+    }
 }

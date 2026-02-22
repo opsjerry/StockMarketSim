@@ -92,4 +92,9 @@ class StockPriceForecaster @Inject constructor(
             return Float.NaN
         }
     }
+
+    override fun getModelVersion(): Int {
+        val prefs = context.getSharedPreferences("ml_ops_prefs", Context.MODE_PRIVATE)
+        return prefs.getInt("current_model_version", 1)
+    }
 }
