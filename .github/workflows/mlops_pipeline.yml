@@ -2,6 +2,9 @@ name: Continuous Training MLOps Pipeline
 
 # Run at midnight every Sunday, or manually via a button click
 on:
+  push:
+    branches:
+      - main
   schedule:
     - cron: '0 0 * * 0'
   workflow_dispatch:
