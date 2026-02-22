@@ -49,8 +49,8 @@ class MultiFactorMLStrategy(
                 
                 if (predictedReturn.isNaN()) return@async null
                 
-                // Phase 4: Risk Management - 0.25% Breakeven Threshold for Regression Model
-                if (predictedReturn < 0.0025f) {
+                // Phase 4: Risk Management - 0.05% Breakeven Threshold for Regression Model (Realistic for 1-day log returns)
+                if (predictedReturn < 0.0005f) {
                     return@async null
                 }
                 
@@ -65,7 +65,7 @@ class MultiFactorMLStrategy(
         }
 
         if (selected.isEmpty()) {
-            println("⚠️ [MultiFactorML] No trades met the 0.25% Breakeven Threshold. Sitting in CASH.")
+            println("⚠️ [MultiFactorML] No trades met the 0.05% Breakeven Threshold. Sitting in CASH.")
             return@coroutineScope emptyMap()
         }
 
