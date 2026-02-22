@@ -45,7 +45,9 @@ class MultiFactorMLStrategy(
                 // Basic Fundamentals for logging context
                 val fundamentals = apiSource.getFundamentals(symbol)
                 
-                val predictedReturn = forecaster.predict(features, symbol, history[currentIdx].date)
+                val predictedReturn = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    forecaster.predict(features, symbol, history[currentIdx].date)
+                }
                 
                 if (predictedReturn.isNaN()) return@async null
                 

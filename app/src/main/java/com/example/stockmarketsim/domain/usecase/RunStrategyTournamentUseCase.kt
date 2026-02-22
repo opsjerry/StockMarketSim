@@ -100,8 +100,10 @@ class RunStrategyTournamentUseCase @Inject constructor(
         // Step A: Run All Strategies on TRAIN Data (Full History provided, window limits trading)
         val backtester = Backtester()
         val processors = Runtime.getRuntime().availableProcessors()
-        // MEMORY OPTIMIZED: Now safe to run in parallel.
-        val concurrency = 4.coerceAtMost(processors) 
+        // MEMORY OPTIMIZED: Throttle concurrency to max 2 strategies at a time.
+        // On physical devices (ARM), evaluating 4+ strategies concurrently across 100 stocks 
+        // with TFLite ML locks the CPU and starves coroutine threads, halting the app.
+        val concurrency = 2.coerceAtMost(processors) 
         val semaphore = Semaphore(concurrency)
 
         val trainResults = withContext(Dispatchers.Default) {
