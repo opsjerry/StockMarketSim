@@ -21,7 +21,7 @@ jobs:
 
     - name: Install Dependencies
       run: |
-        pip install pandas numpy yfinance xgboost scikit-learn tzdata requests
+        pip install -r ml_pipeline/requirements.txt tzdata numpy
 
     - name: Run Data Ingestion
       env:
