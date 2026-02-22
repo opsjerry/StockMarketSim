@@ -18,8 +18,17 @@ MODEL_PATH = os.path.join(PROJECT_ROOT, "app", "src", "main", "assets", "stock_m
 def fetch_data():
     print(f"Fetching data for {TICKER}...")
     try:
-        # Use progress=False to keep logs clean, and handle multi-level index
-        df = yf.download(TICKER, period=f"{HISTORY_YEARS}y", progress=False)
+        try:
+            from curl_cffi import requests as curl_requests
+            session = curl_requests.Session(impersonate="chrome110")
+        except Exception as e:
+            print(f"Warning: Failed to create curl_cffi session ({e}). Falling back to requests.")
+            import requests
+            session = requests.Session()
+            session.headers.update({'User-Agent': 'Mozilla/5.0'})
+            
+        # Use progress=False to keep logs clean, and pass the explicit session
+        df = yf.download(TICKER, period=f"{HISTORY_YEARS}y", progress=False, session=session)
         if df.empty:
             print("WARNING: No data fetched. Check internet connection.")
             return np.zeros(0)

@@ -1,0 +1,131 @@
+2026-02-22 12:53:53.438279: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+C:\Users\jerin\AppData\Local\Programs\Python\Python310\lib\site-packages\google\api_core\_python_version_support.py:275: FutureWarning: You are using a Python version (3.10.10) which Google will stop supporting in new releases of google.api_core once it reaches its end of life (2026-10-04). Please upgrade to the latest Python version, or at least Python 3.11, to continue receiving updates for google.api_core past that date.
+  warnings.warn(message, FutureWarning)
+2026-02-22 12:53:55.730441: I tensorflow/core/util/port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2026-02-22 12:53:59.723330: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: SSE3 SSE4.1 SSE4.2 AVX AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+C:\Users\jerin\AppData\Local\Programs\Python\Python310\lib\site-packages\keras\src\layers\rnn\rnn.py:199: UserWarning: Do not pass an `input_shape`/`input_dim` argument to a layer. When using Sequential models, prefer using an `Input(shape)` object as the first layer in the model instead.
+  super().__init__(**kwargs)
+--- STARTING MULTI-FACTOR TRAINING [Target: C:\Users\jerin\.gemini\antigravity\scratch\StockMarketSim\app\src\main\assets\stock_model.tflite] ---
+    Market: ^NSEI | Features: 64 (60 log returns + 4 TA indicators)
+Fetching data for ^NSEI...
+Fetched 1236 price points.
+Training Samples: 940, Validation Samples: 235
+Feature Shape: 64 features x 1
+Training Model...
+Epoch 1/10
+
+[1m 1/30[0m [37m====================[0m [1m56s[0m 2s/step - loss: 1.5141e-04
+[1m 4/30[0m [32m==[0m[37m==================[0m [1m0s[0m 18ms/step - loss: 1.3494e-04
+[1m 7/30[0m [32m====[0m[37m================[0m [1m0s[0m 19ms/step - loss: 1.3159e-04
+[1m10/30[0m [32m======[0m[37m==============[0m [1m0s[0m 19ms/step - loss: 1.2532e-04
+[1m13/30[0m [32m========[0m[37m============[0m [1m0s[0m 19ms/step - loss: 1.1996e-04
+[1m16/30[0m [32m==========[0m[37m==========[0m [1m0s[0m 19ms/step - loss: 1.1606e-04
+[1m19/30[0m [32m============[0m[37m========[0m [1m0s[0m 19ms/step - loss: 1.1247e-04
+[1m22/30[0m [32m==============[0m[37m======[0m [1m0s[0m 19ms/step - loss: 1.0940e-04
+[1m25/30[0m [32m================[0m[37m====[0m [1m0s[0m 19ms/step - loss: 1.0649e-04
+[1m28/30[0m [32m==================[0m[37m==[0m [1m0s[0m 19ms/step - loss: 1.0373e-04
+[1m30/30[0m [32m====================[0m[37m[0m [1m3s[0m 30ms/step - loss: 7.9519e-05 - val_loss: 3.2937e-05
+Epoch 2/10
+
+[1m 1/30[0m [37m====================[0m [1m1s[0m 37ms/step - loss: 2.3814e-05
+[1m 4/30[0m [32m==[0m[37m==================[0m [1m0s[0m 19ms/step - loss: 5.3264e-05
+[1m 7/30[0m [32m====[0m[37m================[0m [1m0s[0m 19ms/step - loss: 5.6619e-05
+[1m10/30[0m [32m======[0m[37m==============[0m [1m0s[0m 19ms/step - loss: 5.8416e-05
+[1m13/30[0m [32m========[0m[37m============[0m [1m0s[0m 19ms/step - loss: 5.8550e-05
+[1m16/30[0m [32m==========[0m[37m==========[0m [1m0s[0m 19ms/step - loss: 5.8375e-05
+[1m19/30[0m [32m============[0m[37m========[0m [1m0s[0m 19ms/step - loss: 5.7959e-05
+[1m22/30[0m [32m==============[0m[37m======[0m [1m0s[0m 19ms/step - loss: 5.7811e-05
+[1m25/30[0m [32m================[0m[37m====[0m [1m0s[0m 19ms/step - loss: 5.7613e-05
+[1m28/30[0m [32m==================[0m[37m==[0m [1m0s[0m 19ms/step - loss: 5.7453e-05
+[1m30/30[0m [32m====================[0m[37m[0m [1m1s[0m 22ms/step - loss: 5.5672e-05 - val_loss: 3.3226e-05
+Epoch 3/10
+
+[1m 1/30[0m [37m====================[0m [1m1s[0m 38ms/step - loss: 5.4566e-05
+[1m 4/30[0m [32m==[0m[37m==================[0m [1m0s[0m 20ms/step - loss: 6.4961e-05
+[1m 7/30[0m [32m====[0m[37m================[0m [1m0s[0m 19ms/step - loss: 5.9648e-05
+[1m10/30[0m [32m======[0m[37m==============[0m [1m0s[0m 20ms/step - loss: 5.6360e-05
+[1m13/30[0m [32m========[0m[37m============[0m [1m0s[0m 20ms/step - loss: 5.5452e-05
+[1m16/30[0m [32m==========[0m[37m==========[0m [1m0s[0m 19ms/step - loss: 5.4994e-05
+[1m19/30[0m [32m============[0m[37m========[0m [1m0s[0m 19ms/step - loss: 5.4538e-05
+[1m22/30[0m [32m==============[0m[37m======[0m [1m0s[0m 19ms/step - loss: 5.4169e-05
+[1m25/30[0m [32m================[0m[37m====[0m [1m0s[0m 19ms/step - loss: 5.3654e-05
+[1m28/30[0m [32m==================[0m[37m==[0m [1m0s[0m 19ms/step - loss: 5.3115e-05
+[1m30/30[0m [32m====================[0m[37m[0m [1m1s[0m 22ms/step - loss: 4.7355e-05 - val_loss: 2.7454e-05
+Epoch 4/10
+
+[1m 1/30[0m [37m====================[0m [1m1s[0m 37ms/step - loss: 4.3617e-05
+[1m 4/30[0m [32m==[0m[37m==================[0m [1m0s[0m 19ms/step - loss: 4.2511e-05
+[1m 7/30[0m [32m====[0m[37m================[0m [1m0s[0m 19ms/step - loss: 4.3195e-05
+[1m10/30[0m [32m======[0m[37m==============[0m [1m0s[0m 19ms/step - loss: 4.3914e-05
+[1m13/30[0m [32m========[0m[37m============[0m [1m0s[0m 19ms/step - loss: 4.5299e-05
+[1m16/30[0m [32m==========[0m[37m==========[0m [1m0s[0m 19ms/step - loss: 4.6331e-05
+[1m19/30[0m [32m============[0m[37m========[0m [1m0s[0m 19ms/step - loss: 4.6739e-05
+[1m22/30[0m [32m==============[0m[37m======[0m [1m0s[0m 19ms/step - loss: 4.6968e-05
+[1m25/30[0m [32m================[0m[37m====[0m [1m0s[0m 19ms/step - loss: 4.7213e-05
+[1m28/30[0m [32m==================[0m[37m==[0m [1m0s[0m 19ms/step - loss: 4.7435e-05
+[1m30/30[0m [32m====================[0m[37m[0m [1m1s[0m 22ms/step - loss: 4.8552e-05 - val_loss: 3.4756e-05
+Epoch 5/10
+
+[1m 1/30[0m [37m====================[0m [1m1s[0m 36ms/step - loss: 5.0022e-05
+[1m 4/30[0m [32m==[0m[37m==================[0m [1m0s[0m 19ms/step - loss: 5.9934e-05
+[1m 7/30[0m [32m====[0m[37m================[0m [1m0s[0m 19ms/step - loss: 5.6144e-05
+[1m10/30[0m [32m======[0m[37m==============[0m [1m0s[0m 19ms/step - loss: 5.3847e-05
+[1m13/30[0m [32m========[0m[37m============[0m [1m0s[0m 19ms/step - loss: 5.2157e-05
+[1m16/30[0m [32m==========[0m[37m==========[0m [1m0s[0m 19ms/step - loss: 5.1157e-05
+[1m19/30[0m [32m============[0m[37m========[0m [1m0s[0m 19ms/step - loss: 5.0657e-05
+[1m22/30[0m [32m==============[0m[37m======[0m [1m0s[0m 19ms/step - loss: 5.0295e-05
+[1m25/30[0m [32m================[0m[37m====[0m [1m0s[0m 19ms/step - loss: 4.9843e-05
+[1m28/30[0m [32m==================[0m[37m==[0m [1m0s[0m 19ms/step - loss: 4.9367e-05
+[1m30/30[0m [32m====================[0m[37m[0m [1m1s[0m 22ms/step - loss: 4.4873e-05 - val_loss: 2.7925e-05
+Epoch 6/10
+
+[1m 1/30[0m [37m====================[0m [1m1s[0m 37ms/step - loss: 5.9715e-05
+[1m 4/30[0m [32m==[0m[37m==================[0m [1m0s[0m 20ms/step - loss: 5.7226e-05
+[1m 7/30[0m [32m====[0m[37m================[0m [1m0s[0m 20ms/step - loss: 5.5747e-05
+[1m10/30[0m [32m======[0m[37m==============[0m [1m0s[0m 20ms/step - loss: 5.5202e-05
+[1m13/30[0m [32m========[0m[37m============[0m [1m0s[0m 20ms/step - loss: 5.4630e-05
+[1m16/30[0m [32m==========[0m[37m==========[0m [1m0s[0m 19ms/step - loss: 5.3511e-05
+[1m19/30[0m [32m============[0m[37m========[0m [1m0s[0m 19ms/step - loss: 5.2726e-05
+[1m22/30[0m [32m==============[0m[37m======[0m [1m0s[0m 20ms/step - loss: 5.1954e-05
+[1m25/30[0m [32m================[0m[37m====[0m [1m0s[0m 20ms/step - loss: 5.1140e-05
+[1m28/30[0m [32m==================[0m[37m==[0m [1m0s[0m 19ms/step - loss: 5.0403e-05
+[1m30/30[0m [32m====================[0m[37m[0m [1m1s[0m 22ms/step - loss: 4.4186e-05 - val_loss: 2.8873e-05
+Converting to TFLite...
+Saved artifact at 'C:\Users\jerin\AppData\Local\Temp\tmpc3caua7r'. The following endpoints are available:
+
+* Endpoint 'serve'
+  args_0 (POSITIONAL_ONLY): TensorSpec(shape=(None, 64, 1), dtype=tf.float32, name='keras_tensor')
+Output Type:
+  TensorSpec(shape=(None, 1), dtype=tf.float32, name=None)
+Captures:
+  3205760160464: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  3205760161696: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  3205760163280: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  3205760163456: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  3205760163808: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  3205760165920: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  3205760165744: TensorSpec(shape=(), dtype=tf.resource, name=None)
+  3205760162224: TensorSpec(shape=(), dtype=tf.resource, name=None)
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+W0000 00:00:1771745046.510656   15684 tf_tfl_flatbuffer_helpers.cc:364] Ignored output_format.
+W0000 00:00:1771745046.510752   15684 tf_tfl_flatbuffer_helpers.cc:367] Ignored drop_control_dependency.
+2026-02-22 12:54:06.511175: I tensorflow/cc/saved_model/reader.cc:83] Reading SavedModel from: C:\Users\jerin\AppData\Local\Temp\tmpc3caua7r
+2026-02-22 12:54:06.512380: I tensorflow/cc/saved_model/reader.cc:52] Reading meta graph with tags { serve }
+2026-02-22 12:54:06.512393: I tensorflow/cc/saved_model/reader.cc:147] Reading SavedModel debug info (if present) from: C:\Users\jerin\AppData\Local\Temp\tmpc3caua7r
+I0000 00:00:1771745046.521684   15684 mlir_graph_optimization_pass.cc:437] MLIR V1 optimization pass is not enabled
+2026-02-22 12:54:06.522885: I tensorflow/cc/saved_model/loader.cc:236] Restoring SavedModel bundle.
+2026-02-22 12:54:06.557792: I tensorflow/cc/saved_model/loader.cc:220] Running initialization op on SavedModel bundle at path: C:\Users\jerin\AppData\Local\Temp\tmpc3caua7r
+2026-02-22 12:54:06.571340: I tensorflow/cc/saved_model/loader.cc:471] SavedModel load for tags { serve }; Status: success: OK. Took 60164 microseconds.
+2026-02-22 12:54:06.590266: I tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.cc:269] disabling MLIR crash reproducer, set env var `MLIR_CRASH_REPRODUCER_DIRECTORY` to enable.
+2026-02-22 12:54:06.655641: W tensorflow/compiler/mlir/lite/flatbuffer_export.cc:4082] TFLite interpreter needs to link Flex delegate in order to run the model since it contains the following Select TFop(s):
+Flex ops: FlexTensorListReserve, FlexTensorListSetItem, FlexTensorListStack
+Details:
+	tf.TensorListReserve(tensor<2xi32>, tensor<i32>) -> (tensor<!tf_type.variant<tensor<?x32xf32>>>) : {device = ""}
+	tf.TensorListReserve(tensor<2xi32>, tensor<i32>) -> (tensor<!tf_type.variant<tensor<?x64xf32>>>) : {device = ""}
+	tf.TensorListSetItem(tensor<!tf_type.variant<tensor<?x32xf32>>>, tensor<i32>, tensor<?x32xf32>) -> (tensor<!tf_type.variant<tensor<?x32xf32>>>) : {device = "", resize_if_index_out_of_bounds = false}
+	tf.TensorListSetItem(tensor<!tf_type.variant<tensor<?x64xf32>>>, tensor<i32>, tensor<?x64xf32>) -> (tensor<!tf_type.variant<tensor<?x64xf32>>>) : {device = "", resize_if_index_out_of_bounds = false}
+	tf.TensorListStack(tensor<!tf_type.variant<tensor<?x32xf32>>>, tensor<2xi32>) -> (tensor<1x?x32xf32>) : {device = "", num_elements = 1 : i64}
+	tf.TensorListStack(tensor<!tf_type.variant<tensor<?x64xf32>>>, tensor<2xi32>) -> (tensor<64x?x64xf32>) : {device = "", num_elements = 64 : i64}
+See instructions: https://www.tensorflow.org/lite/guide/ops_select
+SUCCESS: Multi-Factor model (64 features) saved to C:\Users\jerin\.gemini\antigravity\scratch\StockMarketSim\app\src\main\assets\stock_model.tflite
