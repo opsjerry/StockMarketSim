@@ -107,4 +107,15 @@ class StockPriceForecaster @Inject constructor(
         val prefs = context.getSharedPreferences("ml_ops_prefs", Context.MODE_PRIVATE)
         return prefs.getInt("current_model_version", 1)
     }
+
+    override fun getExpectedFeatureCount(): Int {
+        if (interpreter == null) initialize()
+        return try {
+            val inputTensor = interpreter?.getInputTensor(0)
+            val shape = inputTensor?.shape() // e.g. [1, 64, 1] or [1, 60, 1]
+            shape?.getOrNull(1) ?: 60  // Second dimension is the feature count
+        } catch (e: Exception) {
+            60  // Default fallback for old 60-feature models
+        }
+    }
 }

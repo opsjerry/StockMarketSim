@@ -31,16 +31,16 @@ class MultiFactorMLStrategy(
                 // Need at least 61 days for 60 log returns
                 if (currentIdx < 61) return@async null
                 
-                // === MULTI-FACTOR FEATURE VECTOR (64 features) ===
-                // [0-59]  60 daily log returns: ln(P_t / P_{t-1})
-                // [60]    RSI(14), normalized to 0.0-1.0
-                // [61]    SMA Ratio (50/200), centered around 1.0
-                // [62]    ATR% (14-day), as fraction of price
-                // [63]    Relative Volume (20-day), ratio vs average
+                // Query the loaded model's expected input size (60 or 64)
+                val expectedFeatures = forecaster.getExpectedFeatureCount()
                 
-                val features = DoubleArray(64)
+                // === FEATURE VECTOR (adapts to model shape) ===
+                // [0-59]   60 daily log returns: ln(P_t / P_{t-1})
+                // [60-63]  (only if model expects 64) TA indicators: RSI, SMA Ratio, ATR%, RelVol
                 
-                // Part 1: 60-day Log Return Sequence
+                val features = DoubleArray(expectedFeatures)
+                
+                // Part 1: 60-day Log Return Sequence (always present)
                 val startIdx = currentIdx - 60
                 for (i in 0 until 60) {
                     val p_t = history[startIdx + i + 1].close
@@ -48,18 +48,19 @@ class MultiFactorMLStrategy(
                     features[i] = kotlin.math.ln(p_t / p_prev)
                 }
                 
-                // Part 2: Technical Indicators (zero-allocation functions)
-                // Extract price arrays for TA calculations
-                val windowSize = currentIdx + 1  // All available data up to cursor
-                val closes = DoubleArray(windowSize) { history[it].close }
-                val highs = DoubleArray(windowSize) { history[it].high }
-                val lows = DoubleArray(windowSize) { history[it].low }
-                val volumes = DoubleArray(windowSize) { history[it].volume.toDouble() }
-                
-                features[60] = TechnicalIndicators.calculateRsiZeroAlloc(closes, windowSize, 14) / 100.0    // Normalize RSI to 0-1
-                features[61] = TechnicalIndicators.calculateSmaRatioZeroAlloc(closes, windowSize, 50, 200)   // ~1.0 centered
-                features[62] = TechnicalIndicators.calculateAtrPctZeroAlloc(highs, lows, closes, windowSize, 14) // 0.01-0.10 range
-                features[63] = TechnicalIndicators.calculateRelativeVolumeZeroAlloc(volumes, windowSize, 20)  // ~1.0 centered
+                // Part 2: Technical Indicators (only if model expects 64 features)
+                if (expectedFeatures >= 64) {
+                    val windowSize = currentIdx + 1
+                    val closes = DoubleArray(windowSize) { history[it].close }
+                    val highs = DoubleArray(windowSize) { history[it].high }
+                    val lows = DoubleArray(windowSize) { history[it].low }
+                    val volumes = DoubleArray(windowSize) { history[it].volume.toDouble() }
+                    
+                    features[60] = TechnicalIndicators.calculateRsiZeroAlloc(closes, windowSize, 14) / 100.0
+                    features[61] = TechnicalIndicators.calculateSmaRatioZeroAlloc(closes, windowSize, 50, 200)
+                    features[62] = TechnicalIndicators.calculateAtrPctZeroAlloc(highs, lows, closes, windowSize, 14)
+                    features[63] = TechnicalIndicators.calculateRelativeVolumeZeroAlloc(volumes, windowSize, 20)
+                }
                 
                 // Fetch fundamentals (real API → Yahoo → cache → skip)
                 val fundamentals = apiSource.getFundamentals(symbol)

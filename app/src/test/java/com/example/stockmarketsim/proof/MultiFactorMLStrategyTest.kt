@@ -26,6 +26,7 @@ class MultiFactorMLStrategyTest {
             override fun initialize() {}
             override fun predict(features: DoubleArray, symbol: String?, date: Long?): Float = fixedReturn
             override fun getModelVersion(): Int = 1
+            override fun getExpectedFeatureCount(): Int = 60
         }
     }
 
@@ -37,6 +38,7 @@ class MultiFactorMLStrategyTest {
             override fun initialize() {}
             override fun predict(features: DoubleArray, symbol: String?, date: Long?): Float = Float.NaN
             override fun getModelVersion(): Int = 1
+            override fun getExpectedFeatureCount(): Int = 60
         }
     }
 
@@ -50,6 +52,7 @@ class MultiFactorMLStrategyTest {
                 return symbolReturns[symbol] ?: Float.NaN
             }
             override fun getModelVersion(): Int = 1
+            override fun getExpectedFeatureCount(): Int = 60
         }
     }
 

@@ -49,6 +49,7 @@ class TournamentUseCaseRegressionTest {
             override fun initialize() {}
             override fun predict(features: DoubleArray, symbol: String?, date: Long?): Float = 0f
             override fun getModelVersion(): Int = 1
+            override fun getExpectedFeatureCount(): Int = 60
         },
         dummyRepo,
         IndianApiSource(
