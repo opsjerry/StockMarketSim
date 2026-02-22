@@ -36,7 +36,7 @@ jobs:
     - name: Train Multi-Factor Model
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-      run: python ml_pipeline/model_training.py
+      run: python scripts/train_stock_model.py
 
     - name: Generate OTA Metadata & SHA256 Checksum
       run: |
