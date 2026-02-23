@@ -233,7 +233,7 @@ fun AboutDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { 
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text("📊 Intelligence Engine v3.0", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
+                Text("📊 Intelligence Engine v3.1", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
             }
         },
         text = {
@@ -341,7 +341,14 @@ fun AboutDialog(onDismiss: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text("🎯 Risk-Appetite Scoring (v3.1)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text(
+                    "Your target return now drives strategy selection. Conservative (≤15%) weights Sharpe 70% for stability. Balanced (15-30%) weights equally. Aggressive (>30%) weights Alpha 80% for growth.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 
                 Divider(modifier = Modifier.padding(vertical = 12.dp))
                 
@@ -349,7 +356,7 @@ fun AboutDialog(onDismiss: () -> Unit) {
                 Text("• 22+ Strategy Variants (Momentum, RSI, Bollinger, Volume, ML)", style = MaterialTheme.typography.bodySmall)
                 Text("• 64-Feature Multi-Factor LSTM (Log Returns + 4 TA Indicators)", style = MaterialTheme.typography.bodySmall)
                 Text("• Real Fundamentals: IndianAPI.in → Yahoo Finance → Room Cache", style = MaterialTheme.typography.bodySmall)
-                Text("• Fee-Adjusted Tournament + Weekly Rebalancing", style = MaterialTheme.typography.bodySmall)
+                Text("• Risk-Appetite-Weighted Tournament + Weekly Rebalancing", style = MaterialTheme.typography.bodySmall)
                 Text("• ATR Trailing Stops + 7% Hard Stop + 30% Sector Cap", style = MaterialTheme.typography.bodySmall)
                 Text("• Regime Filter (SMA-200 + Volatility + CPI) — Zero-Allocation", style = MaterialTheme.typography.bodySmall)
                 

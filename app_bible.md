@@ -102,10 +102,18 @@ Capital preservation is the mathematically optimal path to long-term growth.
     *   Raw prices misinterpret Stock Splits (e.g., 1:10) as 90% crashes, triggering false Stop-Losses.
     *   **Mandate**: All historical data MUST be **Split-Adjusted** (Adjusted Close). The engine back-adjusts OHLC to maintain candle consistency.
 
-### C. Fee-Adjusted Tournament Scoring
-*   **Problem**: High-churn strategies look good on paper but lose to transaction costs in reality.
-*   **Formula**: `adjustedAlpha = alpha − (totalTrades × 0.4%)`
-*   **Effect**: A strategy with 100 trades gets penalized 40 percentage points. This correctly favors strategies that achieve alpha efficiently.
+### C. Risk-Appetite-Weighted Tournament Scoring
+*   **Problem**: High-churn strategies look good on paper but lose to transaction costs in reality. Additionally, a user targeting 5% should not get the same strategy as a user targeting 50%.
+*   **Fee Adjustment**: `adjustedAlpha = alpha − (totalTrades × 0.4%)`
+*   **Risk-Appetite Weighting**: The user's target return determines the tradeoff between raw alpha (growth) and Sharpe ratio (risk-adjusted stability):
+
+| User Target | Profile | Alpha Weight | Sharpe Weight | Effect |
+| :--- | :--- | :--- | :--- | :--- |
+| ≤ 15% | Conservative | 0.3 | 0.7 | Favors Safe Haven, Mean Reversion |
+| 15–30% | Balanced | 0.5 | 0.5 | Equal weight |
+| > 30% | Aggressive | 0.8 | 0.2 | Favors Momentum, ML |
+
+*   **Final Score**: `(adjustedAlpha × αWeight) + (clampedSharpe × σWeight) + hitTargetBonus`
 *   **Applied**: In the Walk-Forward Tournament's final scoring (Step D).
 
 ### D. Comprehensive Regression Suite
@@ -166,5 +174,5 @@ The simulation engine is computationally intensive. To prevent UI freezes (ANR) 
 
 ---
 
-> *Last Updated: 22 Feb 2026 - v3.1: Multi-Factor ML, IndianAPI.in Pipeline, Zero-Allocation RegimeFilter.*
+> *Last Updated: 23 Feb 2026 - v3.2: Risk-Appetite-Weighted Scoring, Multi-Factor ML, IndianAPI.in Pipeline, Zero-Allocation RegimeFilter.*
 

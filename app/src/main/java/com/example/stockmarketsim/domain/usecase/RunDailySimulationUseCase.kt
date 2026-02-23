@@ -96,7 +96,7 @@ class RunDailySimulationUseCase @Inject constructor(
                 // OPTIMIZATION: Only run the Heavy Strategy Tournament when we are actually going to rebalance!
                 // This saves ~6 minutes of processing on Tue-Fri.
                 logManager.log(sim.id, "🏎️ Auto-Pilot: Running Strategy Tournament (Backtesting 40+ Strategies)...")
-                val tournamentResult = runStrategyTournamentUseCase(marketData, benchmarkHistory, sim.currentAmount, 0.20)
+                val tournamentResult = runStrategyTournamentUseCase(marketData, benchmarkHistory, sim.currentAmount, sim.targetReturnPercentage / 100.0)
                 var bestStrategyId = tournamentResult.candidates.firstOrNull()?.strategyId ?: "SAFE_HAVEN"
                 
                 // QUANT VERDICT: Sticky ML Model (Anchor)

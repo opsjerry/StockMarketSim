@@ -150,17 +150,24 @@ class RunStrategyTournamentUseCase @Inject constructor(
             }.awaitAll()
         }
         
-        // Step D: Score based on TEST (Forward) Performance
-        // Fee-Adjusted: Penalize strategies that churn excessively.
-        // Each round-trip trade costs ~0.4% (0.2% slippage each way).
-        // A strategy with 100 trades is penalized 100 * 0.4 = 40% drag on alpha.
-        val COST_PER_TRADE_PCT = 0.4 // 0.4% per round-trip (slippage + commission)
+        // Step D: Risk-Appetite-Weighted Scoring
+        // Fee-Adjusted: Each round-trip trade costs ~0.4% (0.2% slippage each way).
+        val COST_PER_TRADE_PCT = 0.4
+        // The user's target return determines the tradeoff between alpha (raw growth) and Sharpe (risk-adjusted).
+        // Conservative users get strategies with high Sharpe; aggressive users get high-alpha strategies.
+        val alphaWeight: Double
+        val sharpeWeight: Double
+        when {
+            targetReturn <= 0.15 -> { alphaWeight = 0.3; sharpeWeight = 0.7 }  // Conservative: prioritize stability
+            targetReturn <= 0.30 -> { alphaWeight = 0.5; sharpeWeight = 0.5 }  // Balanced: equal weight
+            else                 -> { alphaWeight = 0.8; sharpeWeight = 0.2 }  // Aggressive: prioritize growth
+        }
         
         val rankedResults = testResults.sortedByDescending { result ->
             val feeAdjustedAlpha = result.alpha - (result.totalTrades * COST_PER_TRADE_PCT)
+            val clampedSharpe = (if (result.sharpeRatio > 3.0) 3.0 else result.sharpeRatio) * 10.0
             val hitTargetBonus = if (result.returnPct >= targetReturn) 20.0 else 0.0
-            val sharpeComponent = (if (result.sharpeRatio > 3.0) 3.0 else result.sharpeRatio) * 10.0
-            feeAdjustedAlpha + sharpeComponent + hitTargetBonus
+            (feeAdjustedAlpha * alphaWeight) + (clampedSharpe * sharpeWeight) + hitTargetBonus
         }
         
         return TournamentResult(rankedResults, splitDate)
