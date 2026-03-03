@@ -36,78 +36,129 @@ class RunDailySimulationUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(systemMessage: String? = null) {
         val simulations = simulationRepository.getSimulations().first()
-        
-        for (sim in simulations) {
-            if (sim.status != SimulationStatus.ACTIVE) continue
+        val activeSimulations = simulations.filter { it.status == SimulationStatus.ACTIVE }
+        if (activeSimulations.isEmpty()) return
 
-            logManager.log(sim.id, "🌅 Starting Daily Market Analysis...")
-            
-            // 1. Fetch Market Data (Throttled for Battery Optimization)
-            val universe = universeProvider.getUniverse()
-            val marketData = mutableMapOf<String, List<com.example.stockmarketsim.domain.model.StockQuote>>()
-            
-            // BATTERY OPTIMIZATION: Limit concurrency to 5 threads (was unbounded)
-            // This prevents "heating up" the phone by firing 200 network requests at once.
-            val semaphore = kotlinx.coroutines.sync.Semaphore(5)
-            
-            coroutineScope {
-                universe.map { symbol ->
-                    async<Pair<String, List<com.example.stockmarketsim.domain.model.StockQuote>>> {
-                        semaphore.acquire()
-                        try {
-                             symbol to stockRepository.getStockHistory(symbol, TimeFrame.DAILY, 365)
-                        } finally {
-                             semaphore.release()
-                        }
-                    }
-                }.awaitAll().forEach { (symbol, history) ->
-                    if (history.isNotEmpty()) {
-                        marketData[symbol] = history
+        val activeIds = activeSimulations.map { it.id }
+
+        // ── GLOBAL PIPELINE (runs once, shared by all simulations) ────────────────
+
+        logManager.logToAll(activeIds, "🌅 Starting Daily Market Analysis...")
+
+        // 1. Fetch Market Data (Throttled for Battery Optimization)
+        val universe = universeProvider.getUniverse()
+        val marketData = mutableMapOf<String, List<com.example.stockmarketsim.domain.model.StockQuote>>()
+
+        // BATTERY OPTIMIZATION: Limit concurrency to 5 threads (was unbounded)
+        val semaphore = kotlinx.coroutines.sync.Semaphore(5)
+
+        coroutineScope {
+            universe.map { symbol ->
+                async<Pair<String, List<com.example.stockmarketsim.domain.model.StockQuote>>> {
+                    semaphore.acquire()
+                    try {
+                         symbol to stockRepository.getStockHistory(symbol, TimeFrame.DAILY, 365)
+                    } finally {
+                         semaphore.release()
                     }
                 }
+            }.awaitAll().forEach { (symbol, history) ->
+                if (history.isNotEmpty()) {
+                    marketData[symbol] = history
+                }
             }
-            
-            val benchmarkSymbol = StockUniverse.BENCHMARK_INDEX // "^NSEI"
-            val benchmarkHistory = stockRepository.getStockHistory(benchmarkSymbol, TimeFrame.DAILY, 365)
-            
-            // 3. Regime Filter Check
-            val regimeSignal = RegimeFilter.detectRegime(benchmarkHistory, 0.0)
-            val isBearMarket = regimeSignal == RegimeSignal.BEARISH
-            
-            // Fix: Declare initial strategyId for logging (before potential update)
+        }
+
+        val benchmarkSymbol = StockUniverse.BENCHMARK_INDEX // "^NSEI"
+        val benchmarkHistory = stockRepository.getStockHistory(benchmarkSymbol, TimeFrame.DAILY, 365)
+
+        // 2. Regime Filter Check (global — same market for all sims)
+        val regimeSignal = RegimeFilter.detectRegime(benchmarkHistory, 0.0)
+        val isBearMarket = regimeSignal == RegimeSignal.BEARISH
+
+        if (isBearMarket) {
+            logManager.logToAll(activeIds, "🐻 Bear Market Detected! Switching to safety mode (selling risky assets).")
+        }
+
+        // 3. Scheduling — compute once
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Kolkata"))
+        val isRebalanceDay = cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.MONDAY
+
+        // 4. Strategy Tournament & Fundamentals (global — run once per day, shared)
+        // We run it if ANY simulation needs rebalancing (Monday or FastStart).
+        // Individual sims check their own FastStart condition below, but we pre-run the
+        // tournament here so that each sim can immediately pick its best strategy.
+        var globalTournamentResult: com.example.stockmarketsim.domain.usecase.TournamentResult? = null
+        var qualityPassedUniverse: List<String> = universe
+
+        // Determine if at least one sim will need rebalancing
+        val anyNeedsRebalance = isRebalanceDay || activeSimulations.any { sim ->
+            val portfolio = simulationRepository.getPortfolio(sim.id)
+            portfolio.isEmpty() && sim.currentAmount > 1000.0
+        }
+
+        if (anyNeedsRebalance && !isBearMarket) {
+            logManager.logToAll(activeIds, "🏎️ Auto-Pilot: Running Strategy Tournament (Backtesting 40+ Strategies)...")
+
+            // Use the first sim's target return as the representative (conservative default)
+            // Each sim will apply its own target-return weighting during its individual allocation step.
+            // The tournament is primarily used to pre-filter the top-10 candidates.
+            val representativeTargetReturn = activeSimulations.first().targetReturnPercentage / 100.0
+            val representativeSimDays = activeSimulations.first().durationMonths * 30
+            globalTournamentResult = runStrategyTournamentUseCase(
+                marketData = marketData,
+                benchmarkData = benchmarkHistory,
+                initialCash = activeSimulations.first().currentAmount,
+                targetReturn = representativeTargetReturn,
+                simDurationDays = representativeSimDays
+            )
+
+            // Fundamentals (global)
+            val fundamentals = stockRepository.getBatchFundamentals(universe) { msg ->
+                logManager.logToAll(activeIds, msg)
+            }
+            val (passed, rejected) = qualityFilter.filterWithReasons(universe, fundamentals)
+            if (rejected.isNotEmpty()) {
+                logManager.logToAll(activeIds, "🧹 Filtered out ${rejected.size} low-quality stocks (Low ROE / High Debt).")
+            }
+            qualityPassedUniverse = passed
+        }
+
+        // ── PER-SIMULATION SECTION ────────────────────────────────────────────────
+
+        for (sim in activeSimulations) {
+
+            // Broadcast system message to this sim if app was updated
+            if (systemMessage != null) {
+                logManager.log(sim.id, systemMessage)
+            }
+
             var strategyId = sim.strategyId
 
-            if (isBearMarket && strategyId != "SAFE_HAVEN") {
-                logManager.log(sim.id, "🐻 Bear Market Detected! Switching to safety mode (selling risky assets).")
-            }
-
-            // 3b. Weekly Rebalancing Gate: Only compute new allocations on Mondays OR Fast Start
-            //     Risk management (stops, regime filter) still runs DAILY
-            val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Kolkata"))
-            val isRebalanceDay = cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.MONDAY
-
-            // 4. Calculate Target Allocations (matching Backtester approach)
+            // 5a. Per-sim rebalancing gate
             val portfolio = simulationRepository.getPortfolio(sim.id)
-            val isFastStart = portfolio.isEmpty() && sim.currentAmount > 1000.0 // New simulation or all-cash: deploy immediately
+            val isFastStart = portfolio.isEmpty() && sim.currentAmount > 1000.0
 
-            // 3c. Quality Filter: Remove stocks with poor fundamentals (ROE < 12%, D/E > 1.0)
-            //     Only fetch fundamentals on rebalance days to minimize API calls
             val qualityUniverse = if ((isRebalanceDay || isFastStart) && !isBearMarket) {
-                // OPTIMIZATION: Only run the Heavy Strategy Tournament when we are actually going to rebalance!
-                // This saves ~6 minutes of processing on Tue-Fri.
-                logManager.log(sim.id, "🏎️ Auto-Pilot: Running Strategy Tournament (Backtesting 40+ Strategies)...")
-                val tournamentResult = runStrategyTournamentUseCase(marketData, benchmarkHistory, sim.currentAmount, sim.targetReturnPercentage / 100.0)
-                var bestStrategyId = tournamentResult.candidates.firstOrNull()?.strategyId ?: "SAFE_HAVEN"
-                
+                // Run the sim-specific tournament with the correct per-sim target return AND duration
+                val simDurationDays = sim.durationMonths * 30
+                val simTournamentResult = runStrategyTournamentUseCase(
+                    marketData = marketData,
+                    benchmarkData = benchmarkHistory,
+                    initialCash = sim.currentAmount,
+                    targetReturn = sim.targetReturnPercentage / 100.0,
+                    simDurationDays = simDurationDays
+                )
+                var bestStrategyId = simTournamentResult.candidates.firstOrNull()?.strategyId ?: "SAFE_HAVEN"
+
                 // QUANT VERDICT: Sticky ML Model (Anchor)
-                // If the current strategy is the AI, require the challenger to beat it by a significant margin (1.5x Alpha)
                 if (sim.strategyId == "MULTI_FACTOR_DNN" && bestStrategyId != "MULTI_FACTOR_DNN" && bestStrategyId != "SAFE_HAVEN") {
-                    val currentMlResult = tournamentResult.candidates.find { it.strategyId == "MULTI_FACTOR_DNN" }
-                    val topChallenger = tournamentResult.candidates.firstOrNull()
-                    
+                    val currentMlResult = simTournamentResult.candidates.find { it.strategyId == "MULTI_FACTOR_DNN" }
+                    val topChallenger = simTournamentResult.candidates.firstOrNull()
+
                     if (currentMlResult != null && topChallenger != null) {
                         val marginRequired = if (currentMlResult.alpha > 0) currentMlResult.alpha * 1.5 else currentMlResult.alpha + 2.0
-                        
+
                         if (topChallenger.alpha < marginRequired) {
                             logManager.log(sim.id, "🛡️ Quant Guard: Retaining ML Model. Challenger '${topChallenger.strategyId}' Alpha (${"%.2f".format(topChallenger.alpha)}%) didn't beat ML (${"%.2f".format(currentMlResult.alpha)}%) by required margin.")
                             bestStrategyId = "MULTI_FACTOR_DNN"
@@ -116,38 +167,28 @@ class RunDailySimulationUseCase @Inject constructor(
                         }
                     }
                 }
-                
-                // Reload simulation after strategy switch
-                // NOTE: The tournament updates the DB, so we must reload the simulation object to get the new strategyId
-                val updatedSim = simulationRepository.getSimulationById(sim.id)?.copy(strategyId = bestStrategyId) 
+
+                // Save winning strategy for this sim
+                val updatedSim = simulationRepository.getSimulationById(sim.id)?.copy(strategyId = bestStrategyId)
                 if (updatedSim != null) {
                     simulationRepository.updateSimulation(updatedSim)
-                    strategyId = updatedSim.strategyId // Update local variable
+                    strategyId = updatedSim.strategyId
                 }
 
-                val fundamentals = stockRepository.getBatchFundamentals(universe) { msg ->
-                    logManager.log(sim.id, msg)
-                }
-                val (passed, rejected) = qualityFilter.filterWithReasons(universe, fundamentals)
-                if (rejected.isNotEmpty()) {
-                    logManager.log(sim.id, "🧹 Filtered out ${rejected.size} low-quality stocks (Low ROE / High Debt).")
-                }
-                passed
+                qualityPassedUniverse
             } else {
-                universe // Non-rebalance days: use full universe (positions held anyway)
+                universe
             }
-            
+
             // Reload strategy (it might have changed if we ran the tournament)
-            val currentSim = simulationRepository.getSimulationById(sim.id) ?: continue // Reload to get fresh state for rebalancing
-            // Update strategyId one last time to be sure
+            val currentSim = simulationRepository.getSimulationById(sim.id) ?: continue
             strategyId = currentSim.strategyId
             val strategy = strategyProvider.getStrategy(strategyId)
-            
+
             // Log for Skipped Tournament
             if (!isRebalanceDay && !isFastStart) {
                  logManager.log(sim.id, "⏩ Daily Update: Skipping Strategy Tournament (Runs on Mondays). checking stops/regime...")
             }
-            
 
             val currentPortfolioSnapshot = portfolio.associate { item ->
                 val quote = stockRepository.getStockQuote(item.symbol)
@@ -161,18 +202,17 @@ class RunDailySimulationUseCase @Inject constructor(
                     volume = 0
                 ))
             }
-            
+
             var targetAllocations = if (isBearMarket) {
-                logManager.log(sim.id, "🐻 Bear Market Detected. Selling all positions.")
-                emptyMap() // Defensive: sell all in bear market regardless of day
+                logManager.log(sim.id, "🐻 Bear Market: Selling all positions.")
+                emptyMap()
             } else if (isRebalanceDay || isFastStart) {
-                // Monday: Compute fresh allocations from strategy (using quality-filtered universe)
                 if (isFastStart && !isRebalanceDay) {
                      logManager.log(sim.id, "🚀 FAST START: Immediate deployment triggered (Empty Portfolio).")
                 } else {
                      logManager.log(sim.id, "🗓️ Weekly Strategy Update: Computing new stock picks from ${qualityUniverse.size} candidates...")
                 }
-                
+
                 val cursors = marketData.mapValues { (_, history) -> history.lastIndex }
                 val allocs = strategy.calculateallocation(qualityUniverse, marketData, cursors)
                 if (allocs.isEmpty()) {
@@ -182,7 +222,6 @@ class RunDailySimulationUseCase @Inject constructor(
                 }
                 allocs
             } else {
-                // Non-Monday: Hold current positions (only risk management can force sells)
                 logManager.log(sim.id, "⏳ Mid-week logic: Holding positions (waiting for Monday rebalance).")
                 val totalValue = portfolio.sumOf { it.quantity * (stockRepository.getStockQuote(it.symbol)?.close ?: it.averagePrice) } + sim.currentAmount
                 if (totalValue > 0) {
@@ -194,52 +233,54 @@ class RunDailySimulationUseCase @Inject constructor(
             }
 
             // --- RISK MANAGEMENT (mirroring Backtester.kt) ---
-            
+
             // 4a. Min Price Filter: Remove stocks below ₹50 (avoid penny stocks)
-            // BUG FIX: On holidays/weekends, getStockQuote might return 0.0 or null.
-            // We MUST fallback to the average price or last known price to avoid accidentally selling everything.
             targetAllocations = targetAllocations.filter { (sym, _) ->
                 val livePrice = stockRepository.getStockQuote(sym)?.close
                 val effectivePrice = if (livePrice != null && livePrice > 0) livePrice else {
-                     // Fallback: Check if we own it, use avg price. If not, check history.
                      val owned = portfolio.find { it.symbol == sym }
                      if (owned != null) owned.averagePrice else {
                          marketData[sym]?.lastOrNull()?.close ?: 0.0
                      }
                 }
-                
                 effectivePrice > 50.0
             }
-            
-            // 4b. ATR Trailing Stop-Loss: Force sell positions that hit stop
+
+            // 4b. ATR Trailing Stop-Loss with Honeymoon Period (Phase 2 Fix)
+            // Positions < 3 trading days old use a wider stop (3.5x ATR) to allow for
+            // normal day-1 price discovery. Firing a 2.0x ATR stop on day 1 is "stop hunting".
+            val now = System.currentTimeMillis()
+            val THREE_TRADING_DAYS_MS = 3 * 24 * 60 * 60 * 1000L
             val newPortfolioMap = portfolio.associateBy { it.symbol }.toMutableMap()
             val symbolsToCut = mutableListOf<String>()
             for ((sym, item) in newPortfolioMap) {
                 val symbolHistory = marketData[sym] ?: continue
                 val currentPrice = stockRepository.getStockQuote(sym)?.close ?: continue
                 if (currentPrice <= 0) continue
-                
-                // Track highest price for trailing stop
+
                 val peakPrice = maxOf(item.highestPrice, currentPrice)
                 if (currentPrice > item.highestPrice) {
-                    // Update highestPrice in portfolio for next run
                     newPortfolioMap[sym] = item.copy(highestPrice = currentPrice)
                 }
-                
+
                 val atr = RiskEngine.calculateATR(symbolHistory, 14)
                 val isVolatile = RiskEngine.isVolatile(symbolHistory)
-                val stopPrice = RiskEngine.calculateATRStopPrice(peakPrice, atr, 2.0, isVolatile)
-                
+
+                // Phase 2: Use wider stop for fresh positions (honeymoon)
+                val daysSincePurchase = now - item.purchaseDate
+                val stopMultiplier = if (daysSincePurchase < THREE_TRADING_DAYS_MS) 3.5 else 2.0
+                val stopPrice = RiskEngine.calculateATRStopPrice(peakPrice, atr, stopMultiplier, isVolatile)
+
                 if (currentPrice < stopPrice) {
+                    val honeymoonTag = if (daysSincePurchase < THREE_TRADING_DAYS_MS) " [Honeymoon-widened stop]" else ""
                     symbolsToCut.add(sym)
-                    logManager.log(sim.id, "🛑 Stop-Loss Hit: Selling $sym @ ₹${"%,.2f".format(currentPrice)} (Fell below stop price ₹${"%,.2f".format(stopPrice)})")
+                    logManager.log(sim.id, "🛑 Stop-Loss Hit: Selling $sym @ ₹${"%,.2f".format(currentPrice)} (stop ₹${"%,.2f".format(stopPrice)}, ${stopMultiplier}×ATR$honeymoonTag)")
                 }
             }
-            // Remove stopped-out positions from target allocations (force sell)
             if (symbolsToCut.isNotEmpty()) {
                 targetAllocations = targetAllocations.filterKeys { it !in symbolsToCut }
             }
-            
+
             // 4c. Sector Exposure Cap: Max 30% per sector
             val sectorGroups = targetAllocations.entries.groupBy { StockUniverse.sectorMap[it.key] ?: "OTHER" }
             val cappedAllocations = mutableMapOf<String, Double>()
@@ -253,17 +294,17 @@ class RunDailySimulationUseCase @Inject constructor(
                 }
             }
             targetAllocations = cappedAllocations
-            
+
             logManager.log(sim.id, "📊 Analysis Complete: Target ${targetAllocations.size} stocks. Stops triggered: ${symbolsToCut.size}. Market Mode: $regimeSignal")
 
             // 5. Rebalance
             var cash = sim.currentAmount
-            
+
             val currentEquity = newPortfolioMap.values.sumOf { item ->
                 val price = stockRepository.getStockQuote(item.symbol)?.close ?: item.averagePrice
-                item.quantity * price 
+                item.quantity * price
             } + cash
-            
+
             val transactions = mutableListOf<TransactionEntity>()
             val rebalanceReason = "Daily Strategy Execution ($strategyId)"
             val symbolReasons = targetAllocations.keys.associateWith { "Strategy Allocation" }
@@ -279,31 +320,31 @@ class RunDailySimulationUseCase @Inject constructor(
                 reason = rebalanceReason,
                 symbolReasons = symbolReasons
             )
-            
-            // 5. Update Database
+
+            // 6. Update Database
             simulationRepository.updatePortfolio(sim.id, newPortfolioMap.values.toList())
-            
+
             val finalPortfolioValue = newPortfolioMap.values.sumOf { item ->
                 val price = stockRepository.getStockQuote(item.symbol)?.close ?: item.averagePrice
-                item.quantity * price 
+                item.quantity * price
             }
             val totalEquity = updatedCash + finalPortfolioValue
-            
-            val updatedSim = currentSim.copy(
+
+            val updatedSimFinal = currentSim.copy(
                 currentAmount = updatedCash,
                 totalEquity = totalEquity
             )
-            simulationRepository.updateSimulation(updatedSim)
-            
+            simulationRepository.updateSimulation(updatedSimFinal)
+
             transactions.forEach { transactionDao.insertTransaction(it) }
-            
+
             simulationRepository.insertHistory(sim.id, System.currentTimeMillis(), totalEquity)
-            
+
             logManager.log(sim.id, "🌙 Market Closed. Portfolio Value: ₹${"%,.2f".format(totalEquity)}")
-            
+
             if (currentSim.isLiveTradingEnabled) {
                  notificationManager.sendNotification(
-                    "Live Trading Executed", 
+                    "Live Trading Executed",
                     "Executed ${transactions.size} trades for ${currentSim.name}."
                 )
             }
@@ -311,6 +352,7 @@ class RunDailySimulationUseCase @Inject constructor(
     }
 
     private suspend fun executeRebalancing(
+
         simId: Int,
         isLiveTradingEnabled: Boolean,
         targetAllocations: Map<String, Double>,

@@ -92,9 +92,13 @@ class StockRepositoryImpl @Inject constructor(
     ): List<StockQuote> {
         val cached = dao.getHistory(symbol, 0) // fetch all
         if (cached.isNotEmpty()) {
+            // DEDUP GUARD: The DB unique index (symbol, date) prevents duplicates on new inserts,
+            // but this defensive step handles any stale duplicates in existing data before migration.
             return cached.map { it.toDomain() }
+                .distinctBy { it.date }
+                .sortedBy { it.date }
         }
-        
+
         // Fetch remote
         // Try Alpha Vantage first if key exists
         val avKey = settingsManager.alphaVantageApiKey
@@ -103,14 +107,15 @@ class StockRepositoryImpl @Inject constructor(
             val avHistory = alphaVantageSource.getHistory(avTicker)
             if (avHistory.isNotEmpty()) {
                 dao.insertPrices(avHistory.map { it.toEntity().copy(symbol = symbol) })
-                return avHistory
+                return avHistory.distinctBy { it.date }.sortedBy { it.date }
             }
         }
 
         val remote = remoteSource.getHistory(symbol)
         dao.insertPrices(remote.map { it.toEntity() })
-        return remote
+        return remote.distinctBy { it.date }.sortedBy { it.date }
     }
+
 
     override suspend fun getBatchStockHistory(
         symbols: List<String>,

@@ -45,7 +45,21 @@ fun DashboardScreen(
                     titleContentColor = MaterialTheme.colorScheme.primary
                 ),
                 actions = {
-
+                    // FIX 5: Compliance notice as a compact chip instead of a full-width red banner.
+                    // This reclaims ~70dp of vertical space and is less alarming for repeat users.
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                        shape = MaterialTheme.shapes.extraSmall,
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Text(
+                            text = "SIM ONLY",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
@@ -75,37 +89,7 @@ fun DashboardScreen(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
             
-            // COMPLIANCE BANNER (EXPERT REVIEW)
-            Surface(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                color = MaterialTheme.colorScheme.errorContainer,
-                shape = MaterialTheme.shapes.small
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Warning",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = "SIMULATION MODE",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            text = "Not Financial Advice. No Real Money.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                }
-            }
+            // Banner removed — now a compact chip in the top bar (Fix 5)
 
             if (simulations.isEmpty()) {
                 Box(
@@ -142,6 +126,46 @@ fun DashboardScreen(
                             }
                         )
                     }
+                    // FIX 6: Ghost "Add" card so the screen doesn't look barren when few sims exist
+                    item {
+                        androidx.compose.foundation.BorderStroke(
+                            1.dp, MaterialTheme.colorScheme.outlineVariant
+                        ).let { border ->
+                            androidx.compose.material3.OutlinedCard(
+                                onClick = onNavigateToCreate,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(80.dp),
+                                border = border,
+                                colors = CardDefaults.outlinedCardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
+                                )
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Add,
+                                            contentDescription = "Add",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            "New Simulation",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -164,7 +188,14 @@ fun SimulationCard(
             .lowercase()
             .split(" ")
             .joinToString(" ") { it.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString() } }
-            .replace("Bb", "BB").replace("Ema", "EMA").replace("Rsi", "RSI") // Fix acronyms
+            // Fix all common trading acronyms — case-sensitive, in order of specificity
+            .replace("Bb", "BB")
+            .replace("Ema", "EMA")
+            .replace("Rsi", "RSI")
+            .replace("Macd", "MACD")
+            .replace("Sma", "SMA")
+            .replace("Dnn", "DNN")
+            .replace("Ml", "ML")
     } else {
         "Pending Selection"
     }

@@ -58,6 +58,13 @@ class SimulationDetailViewModel @Inject constructor(
     private val _alpha = MutableStateFlow(0.0)
     val alpha = _alpha.asStateFlow()
 
+    // True when history < 20 points — Sharpe/Alpha are statistically meaningless below this
+    private val _insufficientData = MutableStateFlow(true)
+    val insufficientData = _insufficientData.asStateFlow()
+
+    // Actual Nifty benchmark return fetched from ^NSEI history (not hardcoded)
+    private var _benchmarkReturn: Double = 0.12  // fallback only
+
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing = _isAnalyzing.asStateFlow()
 
@@ -115,8 +122,42 @@ class SimulationDetailViewModel @Inject constructor(
         }
         
         viewModelScope.launch {
+            // Phase 1 Fix: Fetch real Nifty return before computing alpha
+            try {
+                val niftyHistory = stockRepository.getStockHistory(
+                    "^NSEI",
+                    com.example.stockmarketsim.domain.model.TimeFrame.DAILY,
+                    365
+                )
+                if (niftyHistory.size >= 2) {
+                    val niftyStart = niftyHistory.first().close
+                    val niftyEnd = niftyHistory.last().close
+                    // Annualize: (end/start)^(252/n) - 1
+                    val n = niftyHistory.size.toDouble()
+                    _benchmarkReturn = Math.pow(niftyEnd / niftyStart, 252.0 / n) - 1.0
+                    android.util.Log.d("StockSim", "Real Nifty benchmark return: ${"%.2f".format(_benchmarkReturn * 100)}%")
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("StockSim", "Could not fetch Nifty history, using fallback 12%: ${e.message}")
+                // _benchmarkReturn stays at 0.12 fallback
+            }
+        }
+
+        viewModelScope.launch {
             repository.getHistory(simulationId).collect {
                 _history.value = it
+
+                // Phase 1 Fix: Require ≥ 20 observations for statistically meaningful metrics.
+                // With < 20 points the 95% CI on Sharpe spans ±2.0 — displaying it is misleading.
+                if (it.size < 20) {
+                    _insufficientData.value = true
+                    _sharpeRatio.value = 0.0
+                    _alpha.value = 0.0
+                    return@collect
+                }
+
+                _insufficientData.value = false
+
                 if (it.size > 2) {
                     val returns = mutableListOf<Double>()
                     for(i in 1 until it.size) {
@@ -130,7 +171,9 @@ class SimulationDetailViewModel @Inject constructor(
                     val annualizedStdDev = stdDev * Math.sqrt(252.0)
                     
                     _sharpeRatio.value = if(annualizedStdDev > 0) (annualizedReturn - 0.05) / annualizedStdDev else 0.0
-                    _alpha.value = (annualizedReturn - 0.12) * 100 // Assuming 12% Nifty benchmark
+
+                    // Phase 1 Fix: Use real fetched Nifty return, not hardcoded 0.12
+                    _alpha.value = (annualizedReturn - _benchmarkReturn) * 100
                 }
             }
         }

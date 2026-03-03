@@ -47,6 +47,7 @@ fun SimulationDetailScreen(
     val message by viewModel.message.collectAsState()
     val sharpeRatio by viewModel.sharpeRatio.collectAsState()
     val alpha by viewModel.alpha.collectAsState()
+    val insufficientData by viewModel.insufficientData.collectAsState()
     
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -111,16 +112,37 @@ fun SimulationDetailScreen(
                                 val invested = sim.totalEquity - cash
                                 val investedPct = if (sim.totalEquity > 0) (invested / sim.totalEquity).toFloat() else 0f
                                 
+                                // FIX 4: Clarify equity/cash bar — blue fill = invested, green track = cash
                                 Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    "Portfolio Allocation",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
                                 LinearProgressIndicator(
                                     progress = investedPct,
                                     modifier = Modifier.fillMaxWidth(0.9f).height(6.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = Color(0xFF10B981) // Green for cash
+                                    color = MaterialTheme.colorScheme.primary,   // blue = invested
+                                    trackColor = Color(0xFF10B981)               // green = cash
                                 )
                                 Row(modifier = Modifier.fillMaxWidth(0.9f).padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Equity: ${"%.0f".format(investedPct * 100)}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                    Text("Cash: ${"%.0f".format((1 - investedPct) * 100)}%", style = MaterialTheme.typography.labelSmall, color = Color(0xFF10B981))
+                                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                        Box(Modifier.size(6.dp).then(Modifier).also {}, contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                            androidx.compose.foundation.Canvas(modifier = Modifier.size(6.dp)) {
+                                                drawCircle(androidx.compose.ui.graphics.Color(0xFF3B82F6))
+                                            }
+                                        }
+                                        Spacer(Modifier.width(3.dp))
+                                        Text("Invested ${"%.0f".format(investedPct * 100)}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                        androidx.compose.foundation.Canvas(modifier = Modifier.size(6.dp)) {
+                                            drawCircle(androidx.compose.ui.graphics.Color(0xFF10B981))
+                                        }
+                                        Spacer(Modifier.width(3.dp))
+                                        Text("Cash ${"%.0f".format((1 - investedPct) * 100)}%", style = MaterialTheme.typography.labelSmall, color = Color(0xFF10B981))
+                                    }
                                 }
                             }
                             
@@ -128,7 +150,13 @@ fun SimulationDetailScreen(
                                 Text("Active Strategy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
                                 val prettyStrategy = sim.strategyId.replace("_", " ").lowercase()
                                     .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
-                                    .replace("ema", "EMA").replace("rsi", "RSI").replace("macd", "MACD")
+                                    .replace("Ema", "EMA")
+                                    .replace("Rsi", "RSI")
+                                    .replace("Macd", "MACD")
+                                    .replace("Sma", "SMA")
+                                    .replace("Dnn", "DNN")
+                                    .replace("Ml", "ML")
+                                    .replace("Bb", "BB")
                                 
                                 Text(prettyStrategy, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
                                 
@@ -161,35 +189,146 @@ fun SimulationDetailScreen(
             
             // Quant Metrics Layer
             item {
-                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                            Text("Alpha", style = MaterialTheme.typography.labelMedium)
-                            Text("${if (alpha >= 0) "+" else ""}${"%.2f".format(alpha)}%", style = MaterialTheme.typography.titleMedium, color = if (alpha >= 0) Color(0xFF10B981) else Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                if (insufficientData) {
+                    // Phase 1 Fix: Don't show statistically meaningless metrics
+                    // With < 20 data points, the 95% CI on Sharpe spans ±2.0 — displaying it misleads.
+                    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Column(modifier = Modifier.padding(12.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                                Text("α vs Nifty", style = MaterialTheme.typography.labelMedium)
+                                Text("< 20 days", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Insufficient data", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Column(modifier = Modifier.padding(12.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                                Text("Sharpe Ratio", style = MaterialTheme.typography.labelMedium)
+                                Text("< 20 days", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Insufficient data", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
-                    Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                            Text("Sharpe Ratio", style = MaterialTheme.typography.labelMedium)
-                            Text("${"%.2f".format(sharpeRatio)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                } else {
+                    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Column(modifier = Modifier.padding(12.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                                Text("α vs Nifty", style = MaterialTheme.typography.labelMedium)
+                                Text("${if (alpha >= 0) "+" else ""}${"%.2f".format(alpha)}%", style = MaterialTheme.typography.titleMedium, color = if (alpha >= 0) Color(0xFF10B981) else Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Column(modifier = Modifier.padding(12.dp), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                                Text("Sharpe Ratio", style = MaterialTheme.typography.labelMedium)
+                                Text("${"%.2f".format(sharpeRatio)}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // Alpha warning chip — only meaningful when data is sufficient
+                    if (alpha < -3.0 && alpha >= -5.0) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Surface(
+                            color = Color(0xFFF59E0B).copy(alpha = 0.15f),
+                            shape = MaterialTheme.shapes.extraSmall,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            ) {
+                                Text("⚠️", style = MaterialTheme.typography.labelMedium)
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Strategy may auto-switch soon — Alpha (${"%.2f".format(alpha)}%) approaching -5% threshold.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFFF59E0B)
+                                )
+                            }
+                        }
+                    } else if (alpha < -5.0) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+                            shape = MaterialTheme.shapes.extraSmall,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            ) {
+                                Text("🚨", style = MaterialTheme.typography.labelMedium)
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Auto-Pilot switching strategy now — Alpha breached -5% floor.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
-            // Performance Trend Graph
+            // Performance Chart + Goal Progress
             item {
                 if (history.isNotEmpty() && simulation != null) {
-                    Text("Performance Benchmark", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 8.dp))
+                    val sim = simulation!!
+                    val roi = if (sim.initialAmount > 0) ((sim.totalEquity - sim.initialAmount) / sim.initialAmount) * 100 else 0.0
+                    val goalProgress = (roi / sim.targetReturnPercentage).coerceIn(0.0, 1.0).toFloat()
+
+                    // FIX 2: Chart header with legend
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Text("Performance vs Goal", style = MaterialTheme.typography.titleMedium)
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            androidx.compose.foundation.Canvas(modifier = Modifier.size(8.dp)) {
+                                drawCircle(androidx.compose.ui.graphics.Color(0xFF3B82F6))
+                            }
+                            Spacer(Modifier.width(3.dp))
+                            Text("Portfolio", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.width(8.dp))
+                            androidx.compose.foundation.Canvas(modifier = Modifier.size(8.dp)) {
+                                drawCircle(androidx.compose.ui.graphics.Color(0xFF94A3B8))
+                            }
+                            Spacer(Modifier.width(3.dp))
+                            Text("Target", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
                     PortfolioTrendChart(
                         history = history,
-                        initialAmount = simulation!!.initialAmount,
-                        targetReturn = simulation!!.targetReturnPercentage,
+                        initialAmount = sim.initialAmount,
+                        targetReturn = sim.targetReturnPercentage,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(220.dp)
-                            .padding(bottom = 16.dp)
                     )
+
+                    // FIX 3: Goal progress bar — shows how far along the return target we are
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Progress to Goal", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "${"%.2f".format(roi)}% of ${"%.1f".format(sim.targetReturnPercentage)}% target",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (roi >= sim.targetReturnPercentage) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = goalProgress,
+                        modifier = Modifier.fillMaxWidth().height(4.dp),
+                        color = if (roi >= sim.targetReturnPercentage) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
             

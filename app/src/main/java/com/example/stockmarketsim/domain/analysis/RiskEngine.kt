@@ -80,37 +80,71 @@ object RiskEngine {
 
     /**
      * Applies risk management rules to generate target allocations.
-     * Checks signals and market conditions.
+     * Phase 3: Weights are re-scaled by inverse ATR% so high-volatility stocks
+     * get proportionally smaller positions — without changing the strategy signals.
+     *
+     * @param marketData Optional price history per symbol for ATR% computation.
+     *        Pass emptyMap() to skip inverse-vol weighting (backtester compat).
      */
     fun applyRiskManagement(
         signals: List<StrategySignal>,
         totalEquity: Double,
-        isBearMarket: Boolean
+        isBearMarket: Boolean,
+        marketData: Map<String, List<com.example.stockmarketsim.domain.model.StockQuote>> = emptyMap()
     ): Map<String, Double> {
         val allocations = mutableMapOf<String, Double>()
-        
+
         // Filter BUY signals
         val buySignals = signals.filter { it.signal == "BUY" }
-        
+
         if (buySignals.isEmpty()) return allocations
 
         // Position Sizing Logic
         // In Bear Market, reduce exposure
         val maxAllocationPerStock = if (isBearMarket) 0.05 else 0.10 // 5% vs 10%
-        val maxTotalExposure = if (isBearMarket) 0.50 else 1.0 // 50% Cash in Bear
-        
+        val maxTotalExposure      = if (isBearMarket) 0.50 else 1.0  // 50% cash in Bear
+
+        // Step 1: Compute raw signal-weighted allocations (unchanged behaviour)
+        val rawAllocations = mutableMapOf<String, Double>()
         var currentExposure = 0.0
-        
         for (signal in buySignals) {
             if (currentExposure + maxAllocationPerStock > maxTotalExposure) break
-            
-            // Weight allocation by signal confidence (0.5x to 1.5x base allocation)
             val weight = (signal.confidence.coerceIn(0.5, 1.5)) * maxAllocationPerStock
-            
-            allocations[signal.symbol] = weight
+            rawAllocations[signal.symbol] = weight
             currentExposure += weight
         }
-        
+
+        // Step 2: Phase 3 — Inverse-volatility reweighting
+        // For each symbol, compute ATR% = ATR(14) / lastClose.
+        // Allocations are scaled by (1 / ATR%), then renormalized.
+        // Skipped when marketData is empty (backtester, unit tests).
+        if (marketData.isNotEmpty()) {
+            val invVolWeights = mutableMapOf<String, Double>()
+            for ((sym, rawWeight) in rawAllocations) {
+                val history = marketData[sym]
+                val lastClose = history?.lastOrNull()?.close ?: 0.0
+                val atr = if (history != null) calculateATR(history, 14) else 0.0
+                val atrPct = if (lastClose > 0 && atr > 0) atr / lastClose else 0.05  // fallback 5%
+                // Inverse ATR%: lower-volatility stocks get higher weight
+                invVolWeights[sym] = rawWeight / atrPct
+            }
+
+            // Renormalize to preserve total raw exposure
+            val totalRaw    = rawAllocations.values.sum()
+            val totalInvVol = invVolWeights.values.sum()
+
+            if (totalInvVol > 0) {
+                for ((sym, invW) in invVolWeights) {
+                    allocations[sym] = (invW / totalInvVol) * totalRaw
+                        .coerceAtMost(maxAllocationPerStock)  // respect per-stock cap
+                }
+            } else {
+                allocations.putAll(rawAllocations)
+            }
+        } else {
+            allocations.putAll(rawAllocations)
+        }
+
         return allocations
     }
 }

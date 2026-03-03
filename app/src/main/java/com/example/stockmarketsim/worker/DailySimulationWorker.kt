@@ -22,9 +22,30 @@ class DailySimulationWorker @AssistedInject constructor(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         // Promote to Foreground Service to prevent OS killing the job during heavy Analysis
         setForeground(createForegroundInfo())
-        
+
+        // ── MARKET HOURS GUARD ───────────────────────────────────────────────────
+        // NSE trades 09:15–15:30 IST. We allow a wider window (08:30–16:30) to
+        // capture pre-market data availability and post-close price finalization.
+        // Running outside this window wastes battery and fetches stale prices,
+        // causing "frozen equity" log lines with no trades.
+        val istCal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Kolkata"))
+        val hourIst = istCal.get(java.util.Calendar.HOUR_OF_DAY)
+        val minuteIst = istCal.get(java.util.Calendar.MINUTE)
+        val totalMinutesIst = hourIst * 60 + minuteIst
+        val MARKET_OPEN_MINUTES = 8 * 60 + 30   // 08:30 IST
+        val MARKET_CLOSE_MINUTES = 16 * 60 + 30 // 16:30 IST
+        if (totalMinutesIst < MARKET_OPEN_MINUTES || totalMinutesIst > MARKET_CLOSE_MINUTES) {
+            android.util.Log.d(
+                "DailySimulationWorker",
+                "⏰ Outside market window ($hourIst:${"%02d".format(minuteIst)} IST). Skipping simulation."
+            )
+            return@withContext Result.success()
+        }
+        // ────────────────────────────────────────────────────────────────────────
+
         return@withContext try {
             // 1. Data Freshness Check
+
             // We verify if we have fresh data before running the simulation logic.
             // This acts as the "Decision Trigger".
             val proxySymbol = "RELIANCE.NS"

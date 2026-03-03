@@ -5,21 +5,19 @@ import javax.inject.Inject
 
 /**
  * Filters out stocks that fail fundamental quality checks.
- * 
+ *
  * Criteria:
- *   - ROE >= 12% (Return on Equity — profitability)
- *   - Debt/Equity <= 1.0 (Leverage — not over-leveraged)
- * 
- * Stocks with missing data PASS (benefit of the doubt).
- * This prevents RSI and Bollinger Mean Reversion from catching "falling knives"
- * — stocks that are cheap for a reason (deteriorating fundamentals).
+ *   - ROE >= 12%             (profitability)
+ *   - Debt/Equity <= 1.0     (not over-leveraged)
+ *   - Promoter holding < 72% (Phase 3: governance risk gate)
+ *
+ * The promoter cap catches stocks like Adani Power (74.97%) that pass ROE/D/E
+ * on standalone financials but carry concentrated promoter + pledge risk, which
+ * causes 15–20% single-day drawdowns that break ATR stop assumptions.
+ *
+ * Stocks with missing data PASS (benefit of the doubt — don't exclude because API failed).
  */
 class QualityFilter @Inject constructor() {
-
-    companion object {
-        const val MIN_ROE = 0.12       // 12%
-        const val MAX_DEBT_EQUITY = 1.0
-    }
 
     /**
      * Filter a candidate list to only quality stocks.
@@ -33,8 +31,7 @@ class QualityFilter @Inject constructor() {
     ): List<String> {
         return candidates.filter { symbol ->
             val data = fundamentals[symbol]
-            // No data = pass (don't exclude stocks just because API failed)
-            data == null || data.meetsQualityThreshold(MIN_ROE, MAX_DEBT_EQUITY)
+            data == null || data.meetsQualityThreshold()
         }
     }
 
@@ -45,19 +42,30 @@ class QualityFilter @Inject constructor() {
         candidates: List<String>,
         fundamentals: Map<String, FundamentalData>
     ): Pair<List<String>, List<String>> {
-        val passed = mutableListOf<String>()
+        val passed   = mutableListOf<String>()
         val rejected = mutableListOf<String>()
-        
+
         for (symbol in candidates) {
             val data = fundamentals[symbol]
-            if (data == null || data.meetsQualityThreshold(MIN_ROE, MAX_DEBT_EQUITY)) {
+            if (data == null || data.meetsQualityThreshold()) {
                 passed.add(symbol)
             } else {
                 val reason = buildString {
-                    data.returnOnEquity?.let { if (it < MIN_ROE) append("ROE=${(it * 100).toInt()}% ") }
-                    data.debtToEquity?.let { if (it > MAX_DEBT_EQUITY) append("D/E=${"%.1f".format(it)} ") }
+                    data.returnOnEquity?.let {
+                        if (it < FundamentalData.MIN_ROE)
+                            append("ROE=${(it * 100).toInt()}% ")
+                    }
+                    data.debtToEquity?.let {
+                        if (it > FundamentalData.MAX_DEBT_EQUITY)
+                            append("D/E=${"%.1f".format(it)} ")
+                    }
+                    // Phase 3: Log promoter concentration rejections distinctly
+                    data.promoterHolding?.let {
+                        if (it > FundamentalData.MAX_PROMOTER_HOLDING)
+                            append("Promoter=${"%.1f".format(it * 100)}% ")
+                    }
                 }
-                rejected.add("$symbol ($reason)")
+                rejected.add("$symbol (${reason.trim()})")
             }
         }
         return passed to rejected

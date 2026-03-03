@@ -5,8 +5,11 @@ import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
 import com.example.stockmarketsim.domain.model.PortfolioItem
 
+import androidx.room.Index
+
 @Entity(
     tableName = "portfolio_items",
+    indices = [Index(value = ["simulationId"])],   // Avoids full-scan on FK cascade
     foreignKeys = [
         ForeignKey(
             entity = SimulationEntity::class,
@@ -23,7 +26,8 @@ data class PortfolioItemEntity(
     val symbol: String,
     val quantity: Double,
     val averagePrice: Double,
-    val highestPrice: Double // Track peak for trailing stops
+    val highestPrice: Double,               // Track peak for trailing stops
+    val purchaseDate: Long = 0L             // Epoch ms when position was first opened
 )
 
 fun PortfolioItemEntity.toDomain(): PortfolioItem {
@@ -32,7 +36,8 @@ fun PortfolioItemEntity.toDomain(): PortfolioItem {
         symbol = symbol,
         quantity = quantity,
         averagePrice = averagePrice,
-        highestPrice = highestPrice
+        highestPrice = highestPrice,
+        purchaseDate = purchaseDate
     )
 }
 
@@ -43,6 +48,7 @@ fun PortfolioItem.toEntity(simulationId: Int): PortfolioItemEntity {
         symbol = symbol,
         quantity = quantity,
         averagePrice = averagePrice,
-        highestPrice = highestPrice
+        highestPrice = highestPrice,
+        purchaseDate = purchaseDate
     )
 }

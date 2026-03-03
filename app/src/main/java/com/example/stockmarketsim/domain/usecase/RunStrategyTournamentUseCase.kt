@@ -24,7 +24,8 @@ class RunStrategyTournamentUseCase @Inject constructor(
         marketData: Map<String, List<StockQuote>>,
         benchmarkData: List<StockQuote>,
         initialCash: Double,
-        targetReturn: Double
+        targetReturn: Double,
+        simDurationDays: Int = 120  // Used for period-fit penalty
     ): TournamentResult {
         
         // 1. Generate Strategy Variations (Optimized for Performance)
@@ -163,13 +164,46 @@ class RunStrategyTournamentUseCase @Inject constructor(
             else                 -> { alphaWeight = 0.8; sharpeWeight = 0.2 }  // Aggressive: prioritize growth
         }
         
+        // ── PERIOD-FIT PENALTY ────────────────────────────────────────────────────────
+        // A strategy whose indicator period ≥ 70% of simDurationDays cannot converge
+        // within the simulation's lifetime. Its signals are driven by initialization
+        // bias, not by real market momentum. Apply a heavy penalty so the tournament
+        // prefers strategies with adequate warmup time.
+        //
+        // e.g. for simDurationDays = 120:
+        //   EMA(150): period=150 ≥ 84 → -30 penalty  → effectively disqualified
+        //   EMA(50) : period=50  < 84 → no penalty
+        //   EMA(20) : period=20  < 84 → no penalty
+        val periodFitThreshold = simDurationDays * 0.70
+
+        fun extractPrimaryPeriod(strategyId: String): Int {
+            // Try to extract trailing numeric period from known ID patterns
+            val patterns = listOf(
+                "EMA_MOMENTUM_", "MOMENTUM_SMA_", "RSI_",
+                "HYBRID_MOM_RSI_", "VPT_", "REL_VOL_"
+            )
+            for (prefix in patterns) {
+                if (strategyId.startsWith(prefix)) {
+                    return strategyId.substringAfter(prefix).substringBefore("_").toIntOrNull() ?: 0
+                }
+            }
+            // Strategies without a tunable period are always considered well-fit
+            return 0
+        }
+
         val rankedResults = testResults.sortedByDescending { result ->
             val feeAdjustedAlpha = result.alpha - (result.totalTrades * COST_PER_TRADE_PCT)
             val clampedSharpe = (if (result.sharpeRatio > 3.0) 3.0 else result.sharpeRatio) * 10.0
             val hitTargetBonus = if (result.returnPct >= targetReturn) 20.0 else 0.0
-            (feeAdjustedAlpha * alphaWeight) + (clampedSharpe * sharpeWeight) + hitTargetBonus
+
+            // Period-Fit penalty: applied if the strategy's primary indicator has not
+            // had time to converge given the simulation's planned duration
+            val period = extractPrimaryPeriod(result.strategyId)
+            val periodFitPenalty = if (period > 0 && period >= periodFitThreshold) -30.0 else 0.0
+
+            (feeAdjustedAlpha * alphaWeight) + (clampedSharpe * sharpeWeight) + hitTargetBonus + periodFitPenalty
         }
-        
+
         return TournamentResult(rankedResults, splitDate)
     }
 }

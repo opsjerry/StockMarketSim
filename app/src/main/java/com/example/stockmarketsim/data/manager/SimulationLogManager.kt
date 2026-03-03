@@ -31,6 +31,25 @@ class SimulationLogManager @Inject constructor(
             e.printStackTrace()
         }
     }
+
+    /**
+     * Broadcasts a market-level (global) message to every active simulation's log file.
+     * Use this for events that are shared across all simulations (e.g. regime detection,
+     * strategy tournament results, market close summary) so the message appears exactly
+     * once per simulation log rather than being re-written for each sim inside a loop.
+     */
+    fun logToAll(simulationIds: List<Int>, message: String) {
+        val safeMessage = maskSensitiveInfo(message)
+        val timestamp = dateFormat.format(Date())
+        val logLine = "[$timestamp] $safeMessage\n"
+        for (id in simulationIds) {
+            try {
+                File(context.filesDir, "sim_logs_$id.txt").appendText(logLine)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
     
     private fun maskSensitiveInfo(msg: String): String {
         // Simple obfuscation: If it contains specific keywords, redact the specific values

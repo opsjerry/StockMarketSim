@@ -70,7 +70,12 @@ class AnalysisWorker @AssistedInject constructor(
             logManager.log(simulationId, "🏆 Running Strategy Tournament: Identifying best performing strategies for current market...")
 
             // 2. Run Backtests via UseCase (Optimized)
-            val targetReturn = simulation.targetReturnPercentage
+            // FIX: Divide by 100 to convert from percent (e.g. 20.0) to decimal (e.g. 0.20).
+            // RunDailySimulationUseCase correctly applies / 100.0 — AnalysisWorker was passing
+            // the raw percentage, causing every sim to be bucketed as "Aggressive (>30%)" and
+            // preventing the hitTargetBonus from ever firing.
+            val targetReturn = simulation.targetReturnPercentage / 100.0
+
             val tournamentResult = runStrategyTournamentUseCase(
                 marketData = marketData,
                 benchmarkData = benchmarkData,

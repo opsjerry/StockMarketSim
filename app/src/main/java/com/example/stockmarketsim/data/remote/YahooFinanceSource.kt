@@ -221,7 +221,7 @@ class YahooFinanceSource @Inject constructor(
             val cookie = crumbManager.cookie
 
             val url = "https://query1.finance.yahoo.com/v10/finance/quoteSummary/$symbol" +
-                    "?modules=financialData,defaultKeyStatistics&crumb=$crumb"
+                    "?modules=financialData,defaultKeyStatistics,majorHoldersBreakdown&crumb=$crumb"
 
             val requestBuilder = Request.Builder()
                 .url(url)
@@ -258,13 +258,20 @@ class YahooFinanceSource @Inject constructor(
                 val trailingPE = keyStats?.optJSONObject("trailingPE")?.optDouble("raw")
                 val bookValue = keyStats?.optJSONObject("bookValue")?.optDouble("raw")
 
+                // Parse majorHoldersBreakdown module for promoter holding proxy
+                // Yahoo's insidersPercentHeld ≈ NSE promoter + promoter-group holding
+                val holdersBreakdown = result.optJSONObject("majorHoldersBreakdown")
+                val promoterHolding = holdersBreakdown?.optJSONObject("insidersPercentHeld")?.optDouble("raw")
+                    ?.takeIf { !it.isNaN() }
+
                 return@withContext com.example.stockmarketsim.domain.model.FundamentalData(
                     symbol = symbol,
                     returnOnEquity = if (roe?.isNaN() == true) null else roe,
                     debtToEquity = if (debtToEquity?.isNaN() == true) null else debtToEquity,
                     marketCap = marketCap,
                     trailingPE = if (trailingPE?.isNaN() == true) null else trailingPE,
-                    bookValue = if (bookValue?.isNaN() == true) null else bookValue
+                    bookValue = if (bookValue?.isNaN() == true) null else bookValue,
+                    promoterHolding = promoterHolding
                 )
             }
         } catch (e: Exception) {

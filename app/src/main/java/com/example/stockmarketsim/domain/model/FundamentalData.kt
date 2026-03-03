@@ -11,13 +11,31 @@ data class FundamentalData(
     val marketCap: Long?,              // Market Cap in INR
     val trailingPE: Double?,           // Trailing P/E ratio
     val bookValue: Double?,            // Book Value per share
+    // Phase 3: Governance risk proxy — Yahoo's insidersPercentHeld ≈ NSE promoter holding
+    // Stocks with > 72% concentrated holding + pledge risk (Adani, Vedanta, etc.) are flagged.
+    val promoterHolding: Double? = null,  // 0.0–1.0 (e.g., 0.75 = 75%)
     val fetchTimestamp: Long = System.currentTimeMillis()
 ) {
-    /** Quality check: ROE > 12% and Debt/Equity < 1.0 */
-    fun meetsQualityThreshold(minROE: Double = 0.12, maxDebtEquity: Double = 1.0): Boolean {
-        // If data unavailable, pass (benefit of the doubt — don't exclude just because API failed)
+    companion object {
+        const val MIN_ROE = 0.12
+        const val MAX_DEBT_EQUITY = 1.0
+        /** Stocks above this threshold carry concentrated promoter / governance risk */
+        const val MAX_PROMOTER_HOLDING = 0.72   // 72%
+    }
+
+    /**
+     * Quality check: ROE > 12%, D/E < 1.0, and promoter holding < 72%.
+     * If data is unavailable for any field, that check passes (benefit of the doubt).
+     */
+    fun meetsQualityThreshold(
+        minROE: Double = MIN_ROE,
+        maxDebtEquity: Double = MAX_DEBT_EQUITY,
+        maxPromoterHolding: Double = MAX_PROMOTER_HOLDING
+    ): Boolean {
         val roeOk = returnOnEquity == null || returnOnEquity >= minROE
-        val deOk = debtToEquity == null || debtToEquity <= maxDebtEquity
-        return roeOk && deOk
+        val deOk  = debtToEquity == null || debtToEquity <= maxDebtEquity
+        // Phase 3: Block concentrated-promoter stocks regardless of ROE/D/E
+        val promoterOk = promoterHolding == null || promoterHolding <= maxPromoterHolding
+        return roeOk && deOk && promoterOk
     }
 }
