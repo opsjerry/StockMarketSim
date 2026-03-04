@@ -63,17 +63,33 @@ class ModelUpdaterWorker @AssistedInject constructor(
             val jsonOutput = response.body?.string() ?: return@withContext Result.failure()
             val metadata = JSONObject(jsonOutput)
             
-            val latestVersion = metadata.getInt("version")
+            val latestVersion = metadata.getString("version")   // e.g. "20260301.13" — CI emits as unquoted Double
             val downloadUrl = metadata.getString("download_url")
             val expectedSha256 = metadata.getString("sha256")
             
             Log.d(TAG, "Found latest model version: $latestVersion")
 
-            // Read local version preference
+            // Migration-safe version read:
+            // Existing installs stored version as Int via putInt(). Calling getString() on an
+            // Int-typed key throws ClassCastException on most Android versions. We try getString()
+            // first (new format), fall back to getInt() for legacy devices, and migrate in-place.
             val prefs = context.getSharedPreferences("ml_ops_prefs", Context.MODE_PRIVATE)
-            val currentVersion = prefs.getInt("current_model_version", 1) // Factory is v1
+            val currentVersion: String = try {
+                prefs.getString("current_model_version", null) ?: run {
+                    // Key missing entirely — fresh install or legacy Int key; try reading as Int
+                    val legacyInt = prefs.getInt("current_model_version", 0)
+                    if (legacyInt != 0) legacyInt.toString() else "0"
+                }
+            } catch (e: ClassCastException) {
+                // Key exists but was stored as Int on a legacy install — read and migrate
+                val legacyInt = prefs.getInt("current_model_version", 0)
+                val migrated = if (legacyInt != 0) legacyInt.toString() else "0"
+                prefs.edit().remove("current_model_version").putString("current_model_version", migrated).apply()
+                Log.d(TAG, "Migrated model version pref from Int($legacyInt) to String($migrated)")
+                migrated
+            }
 
-            if (latestVersion <= currentVersion) {
+            if (latestVersion == currentVersion) {
                 Log.d(TAG, "App is already using the latest model engine (v$currentVersion).")
                 broadcastLog("[INFO] ✨ Deep Neural Net (v$currentVersion) is up-to-date.")
                 return@withContext Result.success()
@@ -121,7 +137,7 @@ class ModelUpdaterWorker @AssistedInject constructor(
             tempFile.delete()
 
             // 5. Update Version Preference
-            prefs.edit().putInt("current_model_version", latestVersion).apply()
+            prefs.edit().putString("current_model_version", latestVersion).apply()
             
             Log.i(TAG, "✅ Multi-Factor ML Model OTA Update Successful! (v$currentVersion -> v$latestVersion)")
             broadcastLog("[INFO] ✅ New AI Brain activated! Updated to v$latestVersion.")

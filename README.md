@@ -39,6 +39,7 @@ We prioritize capital preservation with a "Safety First" architecture.
   - **Standard Entry:** Trades are normally executed only on **Mondays** to capture weekly swing moves and avoid mid-week noise/churn (saving 80% on transaction costs).
   - **Fast Start:** New simulations or empty portfolios bypass this rule to start trading immediately.
   - **Emergency Rebalance:** Strategy switches trigger immediate rebalancing to align with the new model instantly.
+  - **After-Hours Guard:** The background worker checks IST time before running. Outside `08:30–16:30 IST`, it exits immediately — preventing wasted computation on stale overnight prices and avoiding erratic midnight strategy switches.
 - **Sector Capping:** Exposure is strictly limited to **30% per Sector** and **Max 3 Stocks per Sector** to prevent "False Diversification" (e.g., holding 5 correlated banks).
 - **Liquidity Filter:** The engine rejects any stock with a daily turnover below **₹1 Crore**, ensuring realistic execution simulaton.
 
@@ -77,7 +78,26 @@ Built for performance, scalability, and reliability.
   - **Parallel Execution:** Strategy tournaments run on **4 threads** concurrently.
   - **Zero-Allocation Engine:** Custom "No-GC" loops ensure 60fps UI even during heavy simulation.
   - **Large Heap:** Optimized for heavy data processing.
-- **Testing:** 166-point Regression Suite covering all domain logic (Risk, Slippage, Strategy).
+- **Testing:** 168+ Regression Suite covering all domain logic (Risk, Slippage, Strategy, Data Integrity).
+
+---
+
+## 📋 Changelog
+
+### v3.3 — 2 Mar 2026
+- **Fix: After-Hours Guard** — `DailySimulationWorker` now skips execution outside `08:30–16:30 IST`, eliminating overnight tournament runs and frozen-equity log entries.
+- **Fix: Unique Simulation Logs** — Global pipeline (tournament, fundamentals, regime) hoisted outside the sim loop; `logToAll()` helper broadcasts one message to all active sim logs. With 2 simulations, global events now appear exactly once per log.
+- **Fix: Duplicate Stock Price Data (DB)** — `stock_prices` table rebuilt with `UNIQUE(symbol, date)` index (Migration 10→11). Cleans polluted LSTM input windows caused by repeated candles on every remote fetch.
+- **Fix: `AnalysisWorker` TargetReturn Decimal** — Raw percentage (e.g. `20.0`) is now divided by 100 before passing to the tournament, fixing incorrect risk-appetite bucketing on new simulation creation.
+- **Fix: Portfolio Schema Correction (DB)** — Migration 13→14 recreates `portfolio_items` with Room's exact expected schema, fixing a schema-hash crash on upgraded devices and creating the previously-missing `index_portfolio_items_simulationId`.
+- **DB Version**: v14
+- **Tests**: 168+ (added 2 data-integrity regression tests)
+
+### v3.2 — 23 Feb 2026
+- Risk-Appetite-Weighted Scoring, Multi-Factor ML, IndianAPI.in Pipeline, Zero-Allocation RegimeFilter.
+
+### v3.1 — 22 Feb 2026
+- Multi-Factor ML (64-feature), IndianAPI.in Live Data Pipeline, Zero-Mock Fundamentals.
 
 ---
 

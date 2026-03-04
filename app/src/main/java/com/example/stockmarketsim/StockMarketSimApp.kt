@@ -40,6 +40,13 @@ class StockMarketSimApp : Application(), Configuration.Provider {
             .setConstraints(constraints)
             .build()
 
+        // 3. Weekly ML Model OTA Check (Every 7 days, aligns with Sunday GitHub Actions CI)
+        val modelUpdaterRequest = androidx.work.PeriodicWorkRequestBuilder<com.example.stockmarketsim.worker.ModelUpdaterWorker>(
+            7, java.util.concurrent.TimeUnit.DAYS
+        )
+            .setConstraints(constraints)
+            .build()
+
         val workManager = androidx.work.WorkManager.getInstance(this)
 
         workManager.enqueueUniquePeriodicWork(
@@ -52,6 +59,12 @@ class StockMarketSimApp : Application(), Configuration.Provider {
             "WeeklyStockDiscovery",
             androidx.work.ExistingPeriodicWorkPolicy.KEEP,
             discoveryRequest
+        )
+
+        workManager.enqueueUniquePeriodicWork(
+            "WeeklyModelUpdate",
+            androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            modelUpdaterRequest
         )
     }
 }

@@ -118,11 +118,12 @@ Capital preservation is the mathematically optimal path to long-term growth.
 
 ### D. Comprehensive Regression Suite
 *   **Concept**: Trust, but Verify.
-*   **Coverage**: **166 Unit Tests** covering every critical domain component (`RiskEngine`, `Backtester`, `SlippageModel`, etc.).
+*   **Coverage**: **168+ Unit Tests** covering every critical domain component (`RiskEngine`, `Backtester`, `SlippageModel`, `DataIntegrityRegressionTest`, etc.).
 *   **Key Validations**:
     *   **Equity Capture**: Validates correct return calculations for specific time windows.
     *   **Benchmark Alignment**: Ensures market data and benchmark indices are date-aligned perfectly.
     *   **Safety Checks**: Verifies that Stop-Losses, Sector Caps, and Penny Stock filters behave exactly as documented.
+    *   **Data Integrity**: Verifies `distinctBy { date }` deduplication removes duplicate candles and preserves sort order.
 *   **Execution**: Automated suite runs on every build (`./gradlew testDebugUnitTest`).
 
 ---
@@ -174,5 +175,58 @@ The simulation engine is computationally intensive. To prevent UI freezes (ANR) 
 
 ---
 
-> *Last Updated: 23 Feb 2026 - v3.2: Risk-Appetite-Weighted Scoring, Multi-Factor ML, IndianAPI.in Pipeline, Zero-Allocation RegimeFilter.*
+## 🔧 6. System Reliability & Data Integrity (Added: 2 Mar 2026)
+
+This section documents critical fixes made to improve correctness and reliability.
+
+### A. After-Hours Simulation Guard
+*   **Problem**: WorkManager fired `DailySimulationWorker` at 2–3 AM IST, running the full heavy pipeline on stale overnight data, wasting battery and causing "frozen equity" log entries.
+*   **Fix**: IST market-hours window guard added at the top of `DailySimulationWorker.doWork()`.
+    *   **Active Window**: `08:30 – 16:30 IST` (wider than NSE hours to capture pre-market data availability).
+    *   Outside this window, the worker exits immediately (`Result.success()`) — no tournament, no trades, no log noise.
+*   **Benefit**: Prevents midnight strategy switching (two tournament runs in one day picking different winners), saves battery, and eliminates frozen equity log lines.
+
+### B. Unique Simulation Log Architecture
+*   **Problem**: `RunDailySimulationUseCase` ran the entire market pipeline (fundamentals, tournament, regime check) inside a `for (sim in simulations)` loop. With 2 active simulations, every global event was logged N times — one per simulation — making logs unreadable.
+*   **Fix**: Global pipeline stages (market fetch, regime check, tournament, fundamentals) are **hoisted outside the sim loop** and broadcast to all active simulation logs via a new `SimulationLogManager.logToAll(simulationIds, message)` helper.
+*   **Per-simulation section** (stop-losses, sector caps, rebalancing, equity update) still runs per-simulation using `log(sim.id, …)`.
+*   **Benefit**: `🌅 Starting...`, `🏎️ Tournament...`, `🌙 Market Closed.` each appear **exactly once** per sim log. Tournament runs **once** per day (shared across all sims).
+
+### C. Duplicate Stock Price Fix (Critical ML Impact)
+*   **Problem**: `StockPriceEntity` used `@PrimaryKey(autoGenerate = true)` with no unique constraint on `(symbol, date)`. `OnConflictStrategy.REPLACE` deduplicates by PK only, so every remote fetch inserted **new rows** for the same candle — polluting the LSTM's 60-step input window with repeated prices.
+*   **Fix**:
+    *   Added composite `UNIQUE` index on `(symbol, date)` to `StockPriceEntity`.
+    *   `StockRepositoryImpl.getStockHistory()` now applies `.distinctBy { it.date }.sortedBy { it.date }` as a defense-in-depth guard for any pre-migration data.
+    *   **Migration 10 → 11**: Deduplicates existing rows (keeps highest `id` per `symbol, date`), recreates table with unique index.
+*   **Benefit**: `OnConflictStrategy.REPLACE` now correctly replaces existing candles. LSTM sees clean, non-repeated price history.
+
+### D. AnalysisWorker `targetReturn` Decimal Fix
+*   **Problem**: `AnalysisWorker` passed `simulation.targetReturnPercentage` (e.g. `20.0`) **raw** to the tournament. The bucketing threshold `targetReturn > 0.30` evaluated `20.0 > 0.30 = true`, so **every new simulation was bucketed as Aggressive** regardless of user settings. The `hitTargetBonus` never fired because `returnPct` is in percent but the threshold was `>= 20.0`.
+*   **Fix**: `targetReturn = simulation.targetReturnPercentage / 100.0` — e.g. `20.0` → `0.20`.
+*   **Benefit**: Initial strategy selection via `AnalysisWorker` now correctly respects the user's risk-appetite bucket.
+
+### E. Database Schema History
+
+| Version | Change |
+|:--|:--|
+| 4 → 5 | `transactions.reason` column added |
+| 5 → 6 | `simulations.lastSwitchDate` column added |
+| 6 → 7 | `stock_universe` table created |
+| 7 → 8 | Live trading: `isLiveTradingEnabled`, `brokerOrderId` |
+| 8 → 9 | `predictions` table created |
+| 9 → 10 | `fundamentals_cache` table created |
+| **10 → 11** | **Duplicate candle fix**: `stock_prices` rebuilt with `UNIQUE(symbol, date)` |
+| **11 → 12** | **Honeymoon stop-loss**: `portfolio_items.purchaseDate` column added |
+| 12 → 13 | `fundamentals_cache.promoterHolding` column added |
+| **13 → 14** | **Schema correction**: `portfolio_items` rebuilt to remove DEFAULT on `purchaseDate` and create missing `index_portfolio_items_simulationId` |
+
+> **Current DB Version: 14**
+
+### F. Portfolio Items Schema Correction (Migration 13 → 14)
+*   **Problem**: Migration 11→12 added `purchaseDate` via `ALTER TABLE ... DEFAULT 0`. Room's schema validator expects no default value (the entity uses `val purchaseDate: Long = 0L` without `@ColumnInfo(defaultValue)`) — causing a **schema hash mismatch crash** on upgraded devices. Additionally, `index_portfolio_items_simulationId` declared in `@Entity` was never created by any migration (only existed on fresh installs).
+*   **Fix (Migration 13 → 14)**: Recreates `portfolio_items` table with Room's exact expected schema — no `DEFAULT` clause on `purchaseDate`, correct `FOREIGN KEY` on `simulationId`, and creates the missing index. All existing data is preserved.
+
+---
+
+> *Last Updated: 2 Mar 2026 - v3.3: After-Hours Guard, Unique Log Architecture, DB Duplicate Price Fix, AnalysisWorker Decimal Fix, Portfolio Schema Correction. DB at v14, 168+ Regression Tests.*
 
