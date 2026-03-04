@@ -74,26 +74,22 @@ class ModelUpdaterWorker @AssistedInject constructor(
             // Int-typed key throws ClassCastException on most Android versions. We try getString()
             // first (new format), fall back to getInt() for legacy devices, and migrate in-place.
             val prefs = context.getSharedPreferences("ml_ops_prefs", Context.MODE_PRIVATE)
-            val currentVersion: String = try {
-                prefs.getString("current_model_version", null) ?: run {
-                    // Key missing entirely — fresh install or legacy Int key; try reading as Int
-                    val legacyInt = prefs.getInt("current_model_version", 0)
-                    if (legacyInt != 0) legacyInt.toString() else "0"
+            val currentVersion: String = resolveCurrentVersion(
+                getString = { prefs.getString("current_model_version", null) },
+                getInt    = { prefs.getInt("current_model_version", 0) },
+                migrate   = { migrated ->
+                    prefs.edit().remove("current_model_version")
+                        .putString("current_model_version", migrated).apply()
+                    Log.d(TAG, "Migrated model version pref from Int to String($migrated)")
                 }
-            } catch (e: ClassCastException) {
-                // Key exists but was stored as Int on a legacy install — read and migrate
-                val legacyInt = prefs.getInt("current_model_version", 0)
-                val migrated = if (legacyInt != 0) legacyInt.toString() else "0"
-                prefs.edit().remove("current_model_version").putString("current_model_version", migrated).apply()
-                Log.d(TAG, "Migrated model version pref from Int($legacyInt) to String($migrated)")
-                migrated
-            }
+            )
 
             if (latestVersion == currentVersion) {
                 Log.d(TAG, "App is already using the latest model engine (v$currentVersion).")
                 broadcastLog("[INFO] ✨ Deep Neural Net (v$currentVersion) is up-to-date.")
                 return@withContext Result.success()
             }
+
 
             // 2. Download Model file securely to a temporary file
             Log.d(TAG, "Downloading newer model (v$latestVersion)...")
@@ -159,5 +155,40 @@ class ModelUpdaterWorker @AssistedInject constructor(
         }
         val bytes = digest.digest()
         return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    companion object {
+        /**
+         * Resolves the currently stored model version string in a migration-safe way.
+         *
+         * Legacy installs stored the version as an Int via putInt(). Calling getString()
+         * on an Int-typed SharedPreferences key throws ClassCastException on most Android
+         * versions. This function handles all three states:
+         *   1. String key already exists (new format) → returned directly.
+         *   2. Key missing or null (fresh install) → fallback to getInt(); "0" if absent.
+         *   3. ClassCastException (key exists as Int, legacy install) → read int, migrate,
+         *      invoke [migrate] callback so the caller can persist the new String value.
+         *
+         * Exposed as a companion function so it can be unit-tested without Android Context.
+         */
+        fun resolveCurrentVersion(
+            getString: () -> String?,
+            getInt: () -> Int,
+            migrate: (String) -> Unit
+        ): String {
+            return try {
+                getString() ?: run {
+                    // Key missing — fresh install or wiped prefs; check for legacy Int
+                    val legacyInt = getInt()
+                    if (legacyInt != 0) legacyInt.toString() else "0"
+                }
+            } catch (e: ClassCastException) {
+                // Key exists but typed as Int — legacy install. Read, convert, migrate.
+                val legacyInt = getInt()
+                val migrated = if (legacyInt != 0) legacyInt.toString() else "0"
+                migrate(migrated)
+                migrated
+            }
+        }
     }
 }

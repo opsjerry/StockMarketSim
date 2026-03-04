@@ -40,12 +40,14 @@ jobs:
         SHA=$(sha256sum app/src/main/assets/stock_model.tflite | awk '{ print $1 }')
         VERSION=$(date +%Y%m%d).${{ github.run_number }} # Use YYYYMMDD.RUN_NUMBER as the version
         echo "VERSION=$VERSION" >> $GITHUB_ENV
-        
-        # Build the JSON file for the Android app's ModelUpdaterWorker
-        # We point directly to where the raw file will drop in the GitHub release
+
+        # Build the JSON file for the Android app's ModelUpdaterWorker.
+        # FIX: VERSION is quoted as a JSON String ("$VERSION") so that JSONObject.getString()
+        # returns "20260301.13" cleanly. Previously it was an unquoted JSON Double, which
+        # JSONObject.getString() rendered in scientific notation as "2.026030113E7".
         cat <<EOF > model_metadata.json
         {
-          "version": $VERSION,
+          "version": "$VERSION",
           "download_url": "https://github.com/${{ github.repository }}/releases/download/v$VERSION/stock_model.tflite",
           "sha256": "$SHA"
         }
