@@ -57,7 +57,7 @@ class RunDailySimulationUseCase @Inject constructor(
                 async<Pair<String, List<com.example.stockmarketsim.domain.model.StockQuote>>> {
                     semaphore.acquire()
                     try {
-                         symbol to stockRepository.getStockHistory(symbol, TimeFrame.DAILY, 365)
+                         symbol to stockRepository.getStockHistory(symbol, TimeFrame.DAILY, 600)
                     } finally {
                          semaphore.release()
                     }
@@ -84,36 +84,19 @@ class RunDailySimulationUseCase @Inject constructor(
         val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Kolkata"))
         val isRebalanceDay = cal.get(java.util.Calendar.DAY_OF_WEEK) == java.util.Calendar.MONDAY
 
-        // 4. Strategy Tournament & Fundamentals (global — run once per day, shared)
-        // We run it if ANY simulation needs rebalancing (Monday or FastStart).
-        // Individual sims check their own FastStart condition below, but we pre-run the
-        // tournament here so that each sim can immediately pick its best strategy.
-        var globalTournamentResult: com.example.stockmarketsim.domain.usecase.TournamentResult? = null
+        // 4. Quality Filter universe (global — computed once on rebalance days, shared across all sims)
         var qualityPassedUniverse: List<String> = universe
 
-        // Determine if at least one sim will need rebalancing
+        // Determine if at least one sim will need rebalancing (Monday or empty portfolio)
         val anyNeedsRebalance = isRebalanceDay || activeSimulations.any { sim ->
             val portfolio = simulationRepository.getPortfolio(sim.id)
             portfolio.isEmpty() && sim.currentAmount > 1000.0
         }
 
+        // FIX 1: Fundamentals + quality filter run once globally (shared across all sims).
+        // The dead globalTournamentResult has been removed — the per-sim loop below
+        // runs its own tournament with the correct per-sim parameters.
         if (anyNeedsRebalance && !isBearMarket) {
-            logManager.logToAll(activeIds, "🏎️ Auto-Pilot: Running Strategy Tournament (Backtesting 40+ Strategies)...")
-
-            // Use the first sim's target return as the representative (conservative default)
-            // Each sim will apply its own target-return weighting during its individual allocation step.
-            // The tournament is primarily used to pre-filter the top-10 candidates.
-            val representativeTargetReturn = activeSimulations.first().targetReturnPercentage / 100.0
-            val representativeSimDays = activeSimulations.first().durationMonths * 30
-            globalTournamentResult = runStrategyTournamentUseCase(
-                marketData = marketData,
-                benchmarkData = benchmarkHistory,
-                initialCash = activeSimulations.first().currentAmount,
-                targetReturn = representativeTargetReturn,
-                simDurationDays = representativeSimDays
-            )
-
-            // Fundamentals (global)
             val fundamentals = stockRepository.getBatchFundamentals(universe) { msg ->
                 logManager.logToAll(activeIds, msg)
             }
@@ -141,6 +124,7 @@ class RunDailySimulationUseCase @Inject constructor(
 
             val qualityUniverse = if ((isRebalanceDay || isFastStart) && !isBearMarket) {
                 // Run the sim-specific tournament with the correct per-sim target return AND duration
+                logManager.log(sim.id, "🏎️ Auto-Pilot: Running Strategy Tournament (Backtesting 40+ Strategies)...")
                 val simDurationDays = sim.durationMonths * 30
                 val simTournamentResult = runStrategyTournamentUseCase(
                     marketData = marketData,
@@ -279,6 +263,45 @@ class RunDailySimulationUseCase @Inject constructor(
             }
             if (symbolsToCut.isNotEmpty()) {
                 targetAllocations = targetAllocations.filterKeys { it !in symbolsToCut }
+            }
+
+            // ── FIX 2: MID-WEEK HOLD PATH ─────────────────────────────────────────────
+            // App Bible §2F: "Non-Monday: Existing positions are held. Only risk-triggered
+            // exits occur." Bypass the rebalancer entirely — execute stop-loss sells
+            // directly, update equity, and continue to the next simulation.
+            if (!isRebalanceDay && !isFastStart) {
+                logManager.log(sim.id, "📊 Analysis Complete: Target ${newPortfolioMap.size - symbolsToCut.size} stocks. Stops triggered: ${symbolsToCut.size}. Market Mode: $regimeSignal")
+                var holdCash = sim.currentAmount
+                val holdTxList = mutableListOf<TransactionEntity>()
+                for (sym in symbolsToCut) {
+                    val item = newPortfolioMap.remove(sym) ?: continue
+                    val sellPrice = stockRepository.getStockQuote(sym)?.close ?: item.averagePrice
+                    if (sellPrice <= 0) continue
+                    val gross = item.quantity * sellPrice
+                    val commission = gross * 0.001
+                    holdCash += gross - commission
+                    holdTxList.add(TransactionEntity(
+                        simulationId = sim.id, symbol = sym, type = "SELL",
+                        amount = gross, price = sellPrice, quantity = item.quantity,
+                        date = System.currentTimeMillis(),
+                        reason = "Daily Strategy Execution ($strategyId)", brokerOrderId = null
+                    ))
+                    logManager.log(sim.id, "🔴 SELL $sym @ ₹${"%.2f".format(sellPrice)} | Qty: ${"%.0f".format(item.quantity)} | Value: ₹${"%.0f".format(gross)} (Daily Strategy Execution ($strategyId))")
+                }
+                val holdEquity = newPortfolioMap.values.sumOf { item ->
+                    val p = stockRepository.getStockQuote(item.symbol)?.close ?: item.averagePrice
+                    item.quantity * p
+                }
+                val holdTotal = holdCash + holdEquity
+                simulationRepository.updatePortfolio(sim.id, newPortfolioMap.values.toList())
+                simulationRepository.updateSimulation(currentSim.copy(currentAmount = holdCash, totalEquity = holdTotal))
+                holdTxList.forEach { transactionDao.insertTransaction(it) }
+                simulationRepository.insertHistory(sim.id, System.currentTimeMillis(), holdTotal)
+                if (currentSim.isLiveTradingEnabled && holdTxList.isNotEmpty()) {
+                    notificationManager.sendNotification("Live Trading Executed", "Executed ${holdTxList.size} stop-loss trades for ${currentSim.name}.")
+                }
+                logManager.log(sim.id, "🌙 Market Closed. Portfolio Value: ₹${"%,.2f".format(holdTotal)}")
+                continue
             }
 
             // 4c. Sector Exposure Cap: Max 30% per sector
@@ -450,12 +473,21 @@ class RunDailySimulationUseCase @Inject constructor(
                 val oldAvg = currentItem?.averagePrice ?: 0.0
                 val newAvg = ((currentQty * oldAvg) + (qty * price)) / newQty
 
+                // FIX 4: Preserve purchaseDate for top-up BUYs (avoids resetting honeymoon
+                // period). Only set to now() for brand-new positions (currentItem == null).
+                // Positions migrated from DB v11 with purchaseDate=0 get refreshed here.
+                val purchaseDate = if (currentItem != null && currentItem.purchaseDate > 0L)
+                    currentItem.purchaseDate
+                else
+                    System.currentTimeMillis()
+
                 newPortfolio[symbol] = PortfolioItem(
                     id = currentItem?.id ?: 0,
                     symbol = symbol,
                     quantity = newQty,
                     averagePrice = newAvg,
-                    highestPrice = currentItem?.highestPrice ?: price
+                    highestPrice = currentItem?.highestPrice ?: price,
+                    purchaseDate = purchaseDate
                 )
             }
 

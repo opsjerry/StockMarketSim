@@ -11,6 +11,7 @@ class MacdStrategy(
 ) : Strategy {
 
     override val description: String = "Uses MACD crossovers to find the perfect entry point in a moving cycle."
+    override val primaryPeriod: Int get() = slowPeriod  // 26 — longest EMA in MACD
 
     override suspend fun calculateallocation(
         candidates: List<String>,

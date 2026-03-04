@@ -12,6 +12,7 @@ class BollingerBreakoutStrategy(
 ) : Strategy {
 
     override val description: String = "Buys when Price > Upper Bollinger Band ($period, $stdDevMultiplier)"
+    override val primaryPeriod: Int get() = period
 
     override suspend fun calculateallocation(
         candidates: List<String>,

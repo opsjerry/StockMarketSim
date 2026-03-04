@@ -228,5 +228,39 @@ This section documents critical fixes made to improve correctness and reliabilit
 
 ---
 
-> *Last Updated: 2 Mar 2026 - v3.3: After-Hours Guard, Unique Log Architecture, DB Duplicate Price Fix, AnalysisWorker Decimal Fix, Portfolio Schema Correction. DB at v14, 168+ Regression Tests.*
+> *Last Updated: 4 Mar 2026 - v3.4: Quant Integrity Fixes, Mid-Week Hold Correctness, Sharpe Ratio Fix, Strategy Interface primaryPeriod. DB at v14, 206 Regression Tests.*
 
+---
+
+## 🔬 7. Quant Integrity Fixes (Added: 4 Mar 2026)
+
+Seven correctness flaws were identified via deep code analysis and validated against this bible before fixing.
+
+### A. Dead Global Tournament Removed (Fix 1)
+*   **Problem**: `globalTournamentResult` was computed using the first simulation's parameters, stored in a variable, and **never read**. Every Monday ran one extra full tournament (2-min computation) producing zero benefit.
+*   **Fix**: Removed the global tournament block. Each simulation now runs its own correctly-parameterised tournament in the per-sim loop. The fundamentals/quality filter still runs **once globally** and is shared.
+
+### B. Mid-Week Hold Path Corrected (Fix 2)
+*   **Problem**: On non-Monday days, the code passed current portfolio weights to `PortfolioRebalancer`. Since weights summed to `equity/(equity+cash) < 1.0`, the rebalancer normalised them to 1.0 and generated spurious BUY orders on Tue–Fri, violating §2F.
+*   **Fix**: Mid-week path now bypasses the rebalancer entirely. Stop-loss exits are executed directly with explicit cash crediting. All other positions are held unchanged. Visible in logs as "⏳ Mid-week logic" with no subsequent BUY orders on holding days.
+*   **Biblical Alignment**: §2F states: *"Non-Monday: Existing positions are held. Only risk-triggered exits occur."*
+
+### C. `purchaseDate` Preserved on Position Top-Ups (Fix 4)
+*   **Problem**: Top-up BUYs (adding shares to an existing position) used `.copy()` on the `PortfolioItem`, which preserved `purchaseDate = 0L` for positions migrated from DB v11. The honeymoon guard computed `daysSincePurchase = now - 0 ≈ 56 years` — always past honeymoon, so the wider 3.5× ATR stop **never activated**.
+*   **Fix**: On top-up BUYs, `purchaseDate` is preserved if `> 0L`; for positions with `purchaseDate = 0` (legacy migration) or brand-new positions, it is set to `System.currentTimeMillis()`. This ensures the 3.5× honeymoon stop correctly protects fresh positions.
+
+### D. Market Data Extended to 600 Days (Fix 5)
+*   **Problem**: With 365 days of history and a 200-day warm-up, only 165 tradeable days remained. The 80/20 walk-forward split gave 132 train + 33 test days — far too few for reliable alpha estimation (SE ≈ σ/√33 ≈ 2–3%).
+*   **Fix**: History fetch extended to **600 days**. Now 400 train + 100 test days (SE ≈ σ/√100 ≈ 1–1.5%). Statistically meaningful tournament results.
+
+### E. Sharpe Ratio Corrected (Fix 7)
+*   **Problem**: The Sharpe calculation omitted the risk-free rate deduction, making it the **Information Ratio** instead. This inflated Sharpe by ~0.6 for low-volatility strategies, systematically biasing the tournament toward Safe Haven and Mean Reversion even for aggressive users.
+*   **Fix**: RBI repo rate (6.5% p.a. = `0.065/252` daily) subtracted from `avgDailyReturn` before dividing by σ. Formula: `Sharpe = (avgReturn - riskFree) / σ × √252`.
+
+### F. Strategy Interface: `primaryPeriod` (Fix 6)
+*   **Problem**: The tournament's period-fit penalty used string-prefix parsing to extract indicator periods from strategy IDs. `MACD_BASIC` and `BOLLINGER_BREAKOUT_20_20` had no matching prefix → always returned 0 → **never penalised**, even on short simulations.
+*   **Fix**: `primaryPeriod: Int` added to the `Strategy` interface (default = 0, backward-compatible). `BollingerBreakoutStrategy` and `MacdStrategy` override with their actual periods. The tournament now uses `strategy.primaryPeriod` directly — compiler-enforced, not parsing-dependent.
+
+### G. Version Display Fix: CI JSON Quoting (Bonus Fix)
+*   **Problem**: CI emitted `"version": $VERSION` (unquoted Double). `JSONObject.getString()` called `Double.toString()` → `"2.026030113E7"` in scientific notation instead of `"20260301.13"`.
+*   **Fix**: CI script now emits `"version": "$VERSION"` (quoted String). Visible in logs as `v20260301.13` from the next Sunday pipeline run onward.

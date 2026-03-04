@@ -6,6 +6,13 @@ interface Strategy {
     val id: String
     val name: String
     val description: String
+    /**
+     * The longest indicator warm-up period this strategy needs (e.g. 200 for SMA-200).
+     * Used by the tournament's period-fit penalty to disqualify strategies whose window
+     * cannot converge within the simulation's lifetime.
+     * Default = 0 means "no period constraint" — all existing implementations are safe.
+     */
+    val primaryPeriod: Int get() = 0
     
     // Returns a Map of Symbol -> Target Weight (0.0 to 1.0)
     // Engine will try to rebalance portfolio to match these weights.

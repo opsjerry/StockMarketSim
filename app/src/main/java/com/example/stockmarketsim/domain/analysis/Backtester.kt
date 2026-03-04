@@ -282,7 +282,13 @@ class Backtester @Inject constructor() {
         val avgDailyRet = if (validReturns.isNotEmpty()) validReturns.average() else 0.0
         val variance = if (validReturns.isNotEmpty()) validReturns.map { Math.pow(it - avgDailyRet, 2.0) }.average() else 0.0
         val stdDevDailyRet = Math.sqrt(variance)
-        val sharpeRatio = if (stdDevDailyRet > 0.0001) (avgDailyRet / stdDevDailyRet) * Math.sqrt(252.0) else 0.0
+        // FIX 7: True Sharpe ratio — subtract RBI repo rate (~6.5% p.a. = 0.025% daily).
+        // Previously this was the Information Ratio (no risk-free deduction), which inflated
+        // scores for low-vol strategies by ~0.6 points, biasing the tournament unfairly.
+        val riskFreeDaily = 0.065 / 252.0
+        val sharpeRatio = if (stdDevDailyRet > 0.0001)
+            ((avgDailyRet - riskFreeDaily) / stdDevDailyRet) * Math.sqrt(252.0)
+        else 0.0
 
         var benchReturn = 0.0
         var alpha = 0.0
