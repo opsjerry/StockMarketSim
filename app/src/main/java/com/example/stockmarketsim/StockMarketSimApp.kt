@@ -27,10 +27,16 @@ class StockMarketSimApp : Application(), Configuration.Provider {
             .build()
 
         // 1. Daily Simulation
+        // KEEP policy: prevents re-fire on reinstall. See fix notes in app_bible §7.H.
         val workRequest = androidx.work.PeriodicWorkRequestBuilder<com.example.stockmarketsim.worker.DailySimulationWorker>(
             12, java.util.concurrent.TimeUnit.HOURS
         )
             .setConstraints(constraints)
+            .setInitialDelay(15, java.util.concurrent.TimeUnit.MINUTES)
+            .setBackoffCriteria(
+                androidx.work.BackoffPolicy.EXPONENTIAL,
+                5, java.util.concurrent.TimeUnit.MINUTES  // 5m → 10m → 20m on consecutive retries
+            )
             .build()
         
         // 2. Weekly Stock Discovery (Every 7 days)
@@ -51,7 +57,7 @@ class StockMarketSimApp : Application(), Configuration.Provider {
 
         workManager.enqueueUniquePeriodicWork(
             "DailyStockSimulation",
-            androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
+            androidx.work.ExistingPeriodicWorkPolicy.KEEP,  // Was UPDATE — caused immediate re-fire on reinstall
             workRequest
         )
         

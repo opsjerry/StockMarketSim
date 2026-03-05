@@ -81,8 +81,14 @@ class DailySimulationWorker @AssistedInject constructor(
             runDailySimulationUseCase(systemMessage = systemMessage)
             Result.success()
         } catch (e: Exception) {
-            android.util.Log.e("DailySimulationWorker", "Error running daily simulation", e)
-            if (runAttemptCount < 3) Result.retry() else Result.failure()
+            android.util.Log.e("DailySimulationWorker", "Error running daily simulation (attempt ${runAttemptCount + 1})", e)
+            if (runAttemptCount < 3) {
+                android.util.Log.w("DailySimulationWorker", "⚠️ Retrying in ~${5 * (1 shl runAttemptCount)} minutes...")
+                Result.retry()
+            } else {
+                android.util.Log.e("DailySimulationWorker", "❌ All retry attempts exhausted. Giving up until next scheduled run.")
+                Result.failure()
+            }
         }
     }
 

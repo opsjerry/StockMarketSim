@@ -264,3 +264,14 @@ Seven correctness flaws were identified via deep code analysis and validated aga
 ### G. Version Display Fix: CI JSON Quoting (Bonus Fix)
 *   **Problem**: CI emitted `"version": $VERSION` (unquoted Double). `JSONObject.getString()` called `Double.toString()` → `"2.026030113E7"` in scientific notation instead of `"20260301.13"`.
 *   **Fix**: CI script now emits `"version": "$VERSION"` (quoted String). Visible in logs as `v20260301.13` from the next Sunday pipeline run onward.
+
+### H. Worker Scheduling — Three Cascade Fixes (5 Mar 2026)
+
+*   **Problem 1 — Reinstall-triggered immediate fire**: `DailySimulationWorker` used `ExistingPeriodicWorkPolicy.UPDATE`. Every app update/reinstall calls `Application.onCreate()` → `scheduleDailySimulation()` → `UPDATE` cancels the running job and immediately re-queues one, bypassing the 12-hour periodic interval and the market-hours guard. Observed as an after-hours run at 22:45 IST on 4 Mar.
+    *   **Fix**: Changed to `ExistingPeriodicWorkPolicy.KEEP`. Existing scheduled work is preserved on app restarts.
+
+*   **Problem 2 — No retry backoff**: On exception, `DailySimulationWorker` returned `Result.retry()` with no backoff configured. Default WorkManager minimum backoff is 30 seconds, causing the observed 12:10 → 12:11 → 12:14 three-run-in-4-minutes pattern.
+    *   **Fix**: Added `setBackoffCriteria(EXPONENTIAL, 5 minutes)` and `setInitialDelay(15 minutes)`. Retries now: 5m → 10m → 20m, preventing CPU thrash on repeated tournament failures.
+
+*   **Problem 3 — FastStart tournament cascade**: An incomplete run (app killed mid-rebalance) could leave the portfolio empty while `totalEquity > currentAmount` (history entries show prior trades). The next run saw `isFastStart = true` (empty portfolio + cash) and triggered the full tournament every day until Monday.
+    *   **Fix**: `isFastStart` now requires `isRebalanceDay || hasNeverTraded`. `hasNeverTraded = (totalEquity ≈ currentAmount)` distinguishes a genuinely new simulation (never traded) from one whose portfolio was cleared by a bad run. A recovered simulation now simply waits for Monday to rebalance.

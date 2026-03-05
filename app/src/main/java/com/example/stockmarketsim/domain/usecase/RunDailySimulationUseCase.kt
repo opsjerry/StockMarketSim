@@ -110,6 +110,7 @@ class RunDailySimulationUseCase @Inject constructor(
         // ── PER-SIMULATION SECTION ────────────────────────────────────────────────
 
         for (sim in activeSimulations) {
+          try {
 
             // Broadcast system message to this sim if app was updated
             if (systemMessage != null) {
@@ -120,7 +121,13 @@ class RunDailySimulationUseCase @Inject constructor(
 
             // 5a. Per-sim rebalancing gate
             val portfolio = simulationRepository.getPortfolio(sim.id)
-            val isFastStart = portfolio.isEmpty() && sim.currentAmount > 1000.0
+            // FIX: FastStart is only valid for a GENUINELY new simulation (one that has never
+            // completed a trade cycle). A simulation whose portfolio was emptied by an incomplete
+            // prior run (e.g., app killed mid-rebalance) should wait for Monday, not re-trigger
+            // the full tournament every day. We detect "never traded" by checking if totalEquity
+            // equals currentAmount — a sim that has traded will have history entries that diverge.
+            val hasNeverTraded = sim.totalEquity <= sim.currentAmount + 1.0 // within ₹1 rounding
+            val isFastStart = portfolio.isEmpty() && sim.currentAmount > 1000.0 && (isRebalanceDay || hasNeverTraded)
 
             val qualityUniverse = if ((isRebalanceDay || isFastStart) && !isBearMarket) {
                 // Run the sim-specific tournament with the correct per-sim target return AND duration
@@ -131,7 +138,8 @@ class RunDailySimulationUseCase @Inject constructor(
                     benchmarkData = benchmarkHistory,
                     initialCash = sim.currentAmount,
                     targetReturn = sim.targetReturnPercentage / 100.0,
-                    simDurationDays = simDurationDays
+                    simDurationDays = simDurationDays,
+                    onProgress = { msg -> logManager.log(sim.id, msg) }
                 )
                 var bestStrategyId = simTournamentResult.candidates.firstOrNull()?.strategyId ?: "SAFE_HAVEN"
 
@@ -371,6 +379,26 @@ class RunDailySimulationUseCase @Inject constructor(
                     "Executed ${transactions.size} trades for ${currentSim.name}."
                 )
             }
+
+          } catch (e: kotlinx.coroutines.CancellationException) {
+            // OS killed the coroutine (battery optimisation, WorkManager timeout, app backgrounded).
+            // Use NonCancellable so the log write survives the cancelled scope.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                logManager.log(sim.id,
+                    "⚠️ Simulation interrupted mid-run (system killed the job — low memory / battery saver). " +
+                    "Portfolio unchanged. Will retry in ~5 minutes.")
+                android.util.Log.w("RunDailySimulationUseCase",
+                    "Coroutine cancelled for sim ${sim.id} — ${e.message}")
+            }
+            throw e  // Re-throw so the coroutine cancels normally
+          } catch (e: Exception) {
+            logManager.log(sim.id,
+                "❌ Simulation error: ${e.javaClass.simpleName}: ${e.message?.take(120) ?: "Unknown error"}. " +
+                "Retrying automatically.")
+            android.util.Log.e("RunDailySimulationUseCase",
+                "Error in sim ${sim.id}", e)
+            throw e  // Re-throw so DailySimulationWorker triggers retry
+          }
         }
     }
 

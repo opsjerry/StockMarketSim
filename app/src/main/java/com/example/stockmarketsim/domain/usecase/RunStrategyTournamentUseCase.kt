@@ -25,7 +25,8 @@ class RunStrategyTournamentUseCase @Inject constructor(
         benchmarkData: List<StockQuote>,
         initialCash: Double,
         targetReturn: Double,
-        simDurationDays: Int = 120  // Used for period-fit penalty
+        simDurationDays: Int = 120,  // Used for period-fit penalty
+        onProgress: (String) -> Unit = {}  // Progress callback for sim log visibility
     ): TournamentResult {
         
         // 1. Generate Strategy Variations (Optimized for Performance)
@@ -107,6 +108,7 @@ class RunStrategyTournamentUseCase @Inject constructor(
         val concurrency = 2.coerceAtMost(processors) 
         val semaphore = Semaphore(concurrency)
 
+        onProgress("📊 Tournament Phase 1/2: Running ${strategies.size} strategies on training data (80% window)...")
         val trainResults = withContext(Dispatchers.Default) {
             strategies.map { strategy ->
                 async {
@@ -125,6 +127,7 @@ class RunStrategyTournamentUseCase @Inject constructor(
                 }
             }.awaitAll()
         }
+        onProgress("📊 Tournament Phase 2/2: Testing top 10 finalists on out-of-sample data (20% window)...")
         
         // Step B: Filter Top 10 Candidates (Preserve Diversity)
         val topCandidates = trainResults.sortedByDescending { it.alpha }.take(10).map { result ->
