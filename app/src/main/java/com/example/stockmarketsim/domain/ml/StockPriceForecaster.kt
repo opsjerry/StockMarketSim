@@ -105,7 +105,18 @@ class StockPriceForecaster @Inject constructor(
 
     override fun getModelVersion(): Int {
         val prefs = context.getSharedPreferences("ml_ops_prefs", Context.MODE_PRIVATE)
-        return prefs.getInt("current_model_version", 1)
+        // ModelUpdaterWorker stores this as a String (e.g. "20260301.13") since the OTA fix.
+        // Legacy installs may still have an Int. Resolve safely to avoid ClassCastException.
+        return try {
+            val strVal = prefs.getString("current_model_version", null)
+            // getString returns null if key is absent or stored as Integer type on old prefs.
+            strVal?.toIntOrNull()
+                ?: strVal?.substringBefore(".")?.toIntOrNull()  // "20260301.13" → 20260301
+                ?: prefs.getInt("current_model_version", 1)
+        } catch (e: ClassCastException) {
+            // Key exists as Int (pre-String-migration install) — read it directly.
+            try { prefs.getInt("current_model_version", 1) } catch (e2: Exception) { 1 }
+        }
     }
 
     override fun getExpectedFeatureCount(): Int {
