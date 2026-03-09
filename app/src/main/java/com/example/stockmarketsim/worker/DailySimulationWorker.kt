@@ -37,9 +37,12 @@ class DailySimulationWorker @AssistedInject constructor(
         if (totalMinutesIst < MARKET_OPEN_MINUTES || totalMinutesIst > MARKET_CLOSE_MINUTES) {
             android.util.Log.d(
                 "DailySimulationWorker",
-                "⏰ Outside market window ($hourIst:${"%02d".format(minuteIst)} IST). Skipping simulation."
+                "⏰ Outside market window ($hourIst:${"%02d".format(minuteIst)} IST). Retrying after backoff."
             )
-            return@withContext Result.success()
+            // retry() not success(): allows exponential backoff (5m→10m→20m→40m→80m) to keep
+            // attempting until a retry lands in 08:30–16:30. success() caused phase-lock where
+            // both 12-hour intervals always fell outside market hours (see app_bible §7.H).
+            return@withContext Result.retry()
         }
         // ────────────────────────────────────────────────────────────────────────
 
