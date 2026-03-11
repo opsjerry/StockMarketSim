@@ -18,9 +18,6 @@ class SettingsViewModel @Inject constructor(
     private val encryptedPreferences: com.example.stockmarketsim.data.local.EncryptedPreferences
 ) : ViewModel() {
 
-    private val _apiKey = MutableStateFlow(settingsManager.alphaVantageApiKey)
-    val apiKey: StateFlow<String> = _apiKey
-
     private val _indianApiKey = MutableStateFlow(settingsManager.indianApiKey)
     val indianApiKey: StateFlow<String> = _indianApiKey
 
@@ -30,16 +27,11 @@ class SettingsViewModel @Inject constructor(
     private val _isSyncingUniverse = MutableStateFlow(false)
     val isSyncingUniverse: StateFlow<Boolean> = _isSyncingUniverse
 
-    fun updateApiKey(newKey: String) {
-        _apiKey.value = newKey
-    }
-
     fun updateIndianApiKey(newKey: String) {
         _indianApiKey.value = newKey
     }
 
     fun saveSettings() {
-        settingsManager.alphaVantageApiKey = _apiKey.value
         settingsManager.indianApiKey = _indianApiKey.value
     }
 

@@ -158,6 +158,11 @@ class PortfolioRebalancer(
                 }
 
                 if (actualBuyVal > minTradeValue) {
+                    // MINIMUM VIABLE POSITION: Skip if we can't buy even 1 full share.
+                    // E.g. HDFCBANK @ ₹859 with ₹500 allocated → 0 shares → skip & keep cash.
+                    // This prevents orphan 1-share positions that distort allocation intent.
+                    if (actualBuyVal < executedPrice) continue  // can't afford 1 share
+
                     val buyQty = kotlin.math.floor(actualBuyVal / executedPrice)
                     if (buyQty <= 0) continue
                     

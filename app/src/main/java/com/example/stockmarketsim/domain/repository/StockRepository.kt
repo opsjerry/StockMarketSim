@@ -19,9 +19,9 @@ interface StockRepository {
     
     suspend fun cleanupOldData(onLog: (String) -> Unit = {})
 
-    // New Alpha Vantage integration methods
+    // Macro data (World Bank India CPI — no key required)
     suspend fun getSentimentScore(symbol: String): Double
-    suspend fun getInflationRate(): Double
+    suspend fun getInflationRate(onLog: ((String) -> Unit)? = null): Double
     
     // Fundamentals (Quality Filter)
     suspend fun getFundamentals(symbol: String): FundamentalData?

@@ -228,7 +228,31 @@ This section documents critical fixes made to improve correctness and reliabilit
 
 ---
 
-> *Last Updated: 4 Mar 2026 - v3.4: Quant Integrity Fixes, Mid-Week Hold Correctness, Sharpe Ratio Fix, Strategy Interface primaryPeriod. DB at v14, 206 Regression Tests.*
+> *Last Updated: 11 Mar 2026 - v3.5: Alpha Vantage removed, World Bank India CPI added, Intra-Day Stop-Loss Worker, API Data Visibility Logs. DB at v14, 225 Regression Tests.*
+
+---
+
+## 📡 10. API Source Consolidation (Added: 11 Mar 2026)
+
+### Change: Alpha Vantage removed → World Bank India CPI added
+
+**Alpha Vantage** was removed from the data source stack. Its three uses:
+
+| Old use | Replacement |
+|:--------|:-----------|
+| History fallback | Yahoo Finance is now the sole remote history source — no fallback needed, Yahoo covers all 100 NSE symbols |
+| `getSentimentScore()` | Returns `0.0` (neutral). `NewsSentimentStrategy` never wins the tournament with neutral sentiment and is naturally excluded |
+| `getInflationRate()` — returned **US CPI** | Replaced by `WorldBankSource.getIndianInflationRate()` — returns **India CPI** (annual %, `FP.CPI.TOTL.ZG`), no API key required |
+
+**Current 3-source + 1-optional stack:**
+- **Yahoo Finance** — OHLCV history + batch fundamentals (primary, no key)
+- **IndianAPI.in** — Fundamentals primary (ROE, D/E, promoter holding, India-specific)
+- **World Bank** — India CPI annual % (no key, 3-month lag, fallback: 4.5%)
+- **Zerodha** — Real-time quotes (optional paid, intra-day stop-loss only)
+
+### RegimeFilter inflation threshold updated
+Changed from `> 4.0%` (US CPI context) to `> 6.0%` (top of RBI's 2–6% tolerance band). Above 6%, RBI is in tightening mode → elevated cost of capital → equity valuation compression → BEARISH regime signal is warranted.
+
 
 ---
 
@@ -275,3 +299,92 @@ Seven correctness flaws were identified via deep code analysis and validated aga
 
 *   **Problem 3 — FastStart tournament cascade**: An incomplete run (app killed mid-rebalance) could leave the portfolio empty while `totalEquity > currentAmount` (history entries show prior trades). The next run saw `isFastStart = true` (empty portfolio + cash) and triggered the full tournament every day until Monday.
     *   **Fix**: `isFastStart` now requires `isRebalanceDay || hasNeverTraded`. `hasNeverTraded = (totalEquity ≈ currentAmount)` distinguishes a genuinely new simulation (never traded) from one whose portfolio was cleared by a bad run. A recovered simulation now simply waits for Monday to rebalance.
+
+*   **Problem 4 — Phase-lock (Sunday/Monday misfire)**: `DailySimulationWorker`'s market-hours guard returned `Result.success()` when outside 08:30–16:30 IST. With a 12-hour period, both schedule slots (06:03 and 18:03) permanently fell outside market hours — WorkManager saw each run as "completed successfully" and re-scheduled 12 h later, never landing inside the window.
+    *   **Fix**: Market-hours guard now returns `Result.retry()`. The exponential backoff (5m → 10m → 20m → 40m → 80m) walks the retry window forward until it lands inside 08:30–16:30, at which point the full simulation runs and returns `success()`, resetting the periodic schedule to a market-hours-aligned slot.
+
+---
+
+## 📊 8. API Data Visibility in Simulation Logs (Added: 11 Mar 2026)
+
+Data quality events previously went to `android.util.Log` only. Two gaps were filled:
+
+### A. Market History Coverage Report
+After the parallel history fetch for all 100 universe symbols, `RunDailySimulationUseCase` now logs:
+-   **Per-symbol failures**: symbols with empty Yahoo/AV history are explicitly named (up to 5, then "…and N more")
+-   **Coverage summary**: `📈 Market data ready: 94/100 symbols (94% coverage)` — visible every run day
+
+### B. Fundamentals Failure Log
+`StockRepositoryImpl.getBatchFundamentals()` now logs which specific symbols returned no data from Yahoo Finance (the batch fundamental source). These stocks pass the quality filter by default (App Bible §2G, Flaw 11 — documented intentional behaviour, not a bug). The log makes the decision visible rather than invisible.
+
+---
+
+## 🛡️ 9. Intra-Day Stop-Loss Precision (Added: 11 Mar 2026)
+
+### Problem
+The daily runner evaluates stop-losses using Yahoo Finance's previous-day close price (fetched once at tournament time, cached in Room). A stock that gaps down 9% at 09:30 IST is not stopped until the next daily runner fires, which may be 12–24 hours later.
+
+### Solution: `IntradayStopLossWorker`
+A new **30-minute periodic worker** (`IntradayStopLossWorker`) runs exclusively during NSE market hours (09:15–15:30 IST), checking only held positions — not the full 100-symbol universe.
+
+**Worker schedule**: 30-min period, `KEEP` policy, `LINEAR` 5-min backoff, network constraint.
+**Market hours guard**: Returns `Result.success()` (not `retry()`) outside 09:15–15:30 — a 30-min period cannot phase-lock since the next slot is always within range.
+
+### Core Logic: `CheckIntradayStopLossUseCase`
+Singleton scope — the in-memory `firstBreachMap` persists across 30-min invocations.
+
+**Price resolution hierarchy** (never trigger on stale data):
+1. Zerodha `lastPrice` (real-time) if session active
+2. Room-cached close if cache freshness < 12 h (same trading session)
+3. **Skip** — log `⚠️ No live price for SYMBOL — stop check deferred this cycle`
+
+After 3+ cycles of all symbols skipped: log `⚠️ Intra-day stop monitoring degraded. Daily runner will handle stops at close.`
+
+**ATR parameters unchanged**: 14-period ATR, 2.0× standard, 3.5× honeymoon (<3 trading days), 7% hard floor. The `isVolatile()` turbulence flag (1.5× tightening) also applies. These are calibrated for daily OHLCV bars and serve as the volatility regime estimate; intra-day `lastPrice` is the execution trigger (standard practice).
+
+**2-Check Confirmation Filter** (anti-whipsaw — Quant Issue 1):
+Intra-day ATR stops fire ~2.3× more often than EOD stops at the same threshold (NSE Nifty 200 data). ~60% of extra fires are noise spikes, not genuine reversals. A stop is only **executed** if `currentPrice < stopPrice` for **two consecutive 30-min checks** (≈ 30–60 min sustained breach). The `firstBreachMap` stores the breach timestamp per `simId:symbol`; if price recovers, the map entry is removed.
+
+**DB commit order** (Cash Accounting — Quant Issue 5):
+1. `updatePortfolio()` — removes sold positions
+2. `insertTransaction()` — records SELL
+3. `updateSimulation(cash, equity)` — **last write**, ensures daily runner reads committed cash
+
+**Trailing peak update** (Quant Issue 3):
+When `currentPrice > item.highestPrice`, `PortfolioDao.updateHighestPrice()` is called immediately — the trailing stop follows the price up intra-day, not just end-of-day.
+
+### Log output
+```
+⚡ INTRADAY STOP: TATASTEEL.NS breached ATR stop ₹192.50 (price ₹190.10, 2.0×ATR, confirmed over 30 min)
+🔴 SELL TATASTEEL.NS @ ₹190.10 | Qty: 16 | Value: ₹3,042 (Intra-Day Stop-Loss)
+```
+
+### Relationship to Daily Runner
+The daily runner (`DailySimulationWorker`) remains the **guaranteed safety net**. If Zerodha is inactive all day and Room cache is stale, the intra-day worker defers all checks and the daily runner catches stops at close via Yahoo prices. The two workers never double-execute the same stop: if the intra-day worker removes a position from the DB, the daily runner reads the updated portfolio and finds nothing to stop-out.
+
+---
+
+## 🔧 11. Quant Fixes & Settings Cleanup (Added: 11 Mar 2026)
+
+### A. Position Cap Operator Precedence Fix — `RiskEngine.kt`
+**Bug**: `.coerceAtMost(maxAllocationPerStock)` was applied to `totalRaw` alone (method call binds tighter than `*`). The per-stock 10% cap was silently ignored — KOTAKBANK received 25% of portfolio in live runs.
+**Fix**: `allocations[sym] = ((invW / totalInvVol) * totalRaw).coerceAtMost(maxAllocationPerStock)`
+
+### B. Minimum Viable Position Skip — `PortfolioRebalancer.kt`
+**Fix**: Added `if (actualBuyVal < executedPrice) continue` before `floor()`. If allocated cash can't buy 1 full share, skip and keep cash liquid. Eliminates orphan 1-share positions on expensive stocks (HDFCBANK @ ₹859 etc.).
+
+### C. Fast-Bear 20-Day Tripwire — `RegimeFilter.kt`
+**Enhancement**: New check **before** SMA(200): if Nifty drops **>7% in 20 days** → immediate `BEARISH`. Cuts detection lag from 4–8 weeks to days for event-driven shocks (crude oil spikes, geopolitical escalation, FII outflows). Logged as `⚡ Fast-Bear triggered: Nifty −X.X% in 20 days`.
+
+### D. World Bank CPI Fallback Visible in Sim Logs — `WorldBankSource.kt`, `StockRepositoryImpl.kt`
+`WorldBankSource.getIndianInflationRate()` now returns `CpiResult(value, isFallback, year)`. Two log paths:
+- **Success**: `🌍 India CPI (2024): 5.65% (World Bank)`
+- **Fallback**: `⚠️ World Bank CPI fetch failed — using fallback 4.5% for regime detection. Accuracy may be reduced.`
+
+### E. Settings Page & Alpha Vantage Fully Removed
+- `SettingsManager.alphaVantageApiKey` property deleted
+- `SettingsViewModel` AV state + `updateApiKey()` removed; `saveSettings()` now saves IndianAPI key only
+- `SettingsScreen` AV `OutlinedTextField` removed; helper text updated to mention World Bank CPI (no key needed)
+- About dialog bumped to **Intelligence Engine v3.5**
+- `AlphaVantageSource.kt` **deleted** — last reference to `alphaVantageApiKey`
+

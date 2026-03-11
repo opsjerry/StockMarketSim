@@ -80,8 +80,8 @@ class RegimeFilterRegressionTest {
     @Test
     fun `bearish regime with high inflation overrides uptrend`() {
         val history = generateBullishHistory(250)
-        val regime = RegimeFilter.detectRegime(history, inflation = 6.0)  // >4% inflation
-        assertEquals("High inflation should force BEARISH regardless of trend", RegimeSignal.BEARISH, regime)
+        val regime = RegimeFilter.detectRegime(history, inflation = 6.5)  // > 6% (above RBI upper band)
+        assertEquals("High India CPI should force BEARISH regardless of trend", RegimeSignal.BEARISH, regime)
     }
 
     @Test
@@ -140,19 +140,19 @@ class RegimeFilterRegressionTest {
     }
 
     @Test
-    fun `inflation at exact threshold of 4 percent is not high`() {
+    fun `inflation at exact threshold of 6 percent is not high`() {
         val history = generateBullishHistory(250)
-        val regime = RegimeFilter.detectRegime(history, inflation = 4.0)
-        // Inflation > 4.0 triggers bearish, exactly 4.0 should not
-        assertNotEquals("Inflation at exactly 4.0 should NOT trigger bearish override",
+        val regime = RegimeFilter.detectRegime(history, inflation = 6.0)
+        // India CPI > 6.0 triggers bearish (top of RBI 2-6% band), exactly 6.0 should not
+        assertNotEquals("Inflation at exactly 6.0 should NOT trigger bearish override",
             RegimeSignal.BEARISH, regime)
     }
 
     @Test
     fun `inflation just above threshold forces bearish`() {
         val history = generateBullishHistory(250)
-        val regime = RegimeFilter.detectRegime(history, inflation = 4.01)
-        assertEquals("Inflation just above 4.0 should trigger BEARISH", RegimeSignal.BEARISH, regime)
+        val regime = RegimeFilter.detectRegime(history, inflation = 6.01)
+        assertEquals("Inflation just above 6.0% (India RBI upper band) should trigger BEARISH", RegimeSignal.BEARISH, regime)
     }
 
     @Test

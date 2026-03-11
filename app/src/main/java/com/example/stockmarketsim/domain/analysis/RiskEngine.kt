@@ -135,8 +135,10 @@ object RiskEngine {
 
             if (totalInvVol > 0) {
                 for ((sym, invW) in invVolWeights) {
-                    allocations[sym] = (invW / totalInvVol) * totalRaw
-                        .coerceAtMost(maxAllocationPerStock)  // respect per-stock cap
+                    // FIX: brackets ensure coerceAtMost applies to the full product,
+                    // not just totalRaw (previous bug caused KOTAKBANK to absorb 25%).
+                    allocations[sym] = ((invW / totalInvVol) * totalRaw)
+                        .coerceAtMost(maxAllocationPerStock)  // enforce per-stock cap (10% bull / 5% bear)
                 }
             } else {
                 allocations.putAll(rawAllocations)

@@ -3,6 +3,7 @@ package com.example.stockmarketsim.data.repository
 import com.example.stockmarketsim.data.local.dao.StockDao
 import com.example.stockmarketsim.data.local.entity.toDomain
 import com.example.stockmarketsim.data.local.entity.toEntity
+import com.example.stockmarketsim.data.remote.WorldBankSource
 import com.example.stockmarketsim.data.remote.YahooFinanceSource
 import com.example.stockmarketsim.domain.model.StockQuote
 import com.example.stockmarketsim.domain.model.TimeFrame
@@ -12,26 +13,23 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 
+/**
+ * Data source stack (App Bible §8, §9):
+ *  - Yahoo Finance  : OHLCV history (primary, no key), fundamentals (batch fallback)
+ *  - IndianAPI.in   : Fundamentals primary (ROE, D/E, P/E, promoter holding)
+ *  - World Bank     : India CPI annual % — no API key, replaces AlphaVantage US CPI
+ *  - Zerodha        : Real-time quotes (paid, optional — intra-day stop-loss)
+ *
+ * Alpha Vantage removed (Mar 2026): provided only US CPI (wrong country) and a history
+ * fallback already covered by Yahoo. NewsSentimentStrategy now returns neutral (0.0).
+ */
 class StockRepositoryImpl @Inject constructor(
     private val remoteSource: YahooFinanceSource,
-    private val alphaVantageSource: com.example.stockmarketsim.data.remote.AlphaVantageSource,
+    private val worldBankSource: WorldBankSource,
     private val zerodhaSource: com.example.stockmarketsim.data.remote.ZerodhaSource,
     private val discoverySource: com.example.stockmarketsim.data.remote.WikipediaDiscoverySource,
-    private val dao: StockDao,
-    private val settingsManager: com.example.stockmarketsim.data.manager.SettingsManager
+    private val dao: StockDao
 ) : StockRepository {
-
-    /**
-     * Alpha Vantage uses .NSE and .BSE for Indian stocks, whereas Yahoo uses .NS and .BO.
-     */
-    private fun convertToAvTicker(symbol: String): String {
-        return when {
-            symbol.endsWith(".NS") -> symbol.removeSuffix(".NS") + ".NSE"
-            symbol.endsWith(".BO") -> symbol.removeSuffix(".BO") + ".BSE"
-            symbol == "^NSEI" -> "NSE:NIFTY" // Example for benchmark
-            else -> symbol
-        }
-    }
 
     override suspend fun getStockQuote(symbol: String): StockQuote? {
         val latest = dao.getLatestPrice(symbol)
@@ -57,18 +55,7 @@ class StockRepositoryImpl @Inject constructor(
                  }
             }
 
-            // PRIORITY 2: Alpha Vantage if enabled and key present
-            val avKey = settingsManager.alphaVantageApiKey
-            if (avKey.isNotEmpty()) {
-                val avTicker = convertToAvTicker(symbol)
-                val avHistory = alphaVantageSource.getHistory(avTicker)
-                if (avHistory.isNotEmpty()) {
-                    dao.insertPrices(avHistory.map { it.toEntity().copy(symbol = symbol) }) // Save back with original symbol
-                    return avHistory.last()
-                }
-            }
-
-            // FALLBACK / DEFAULT: Yahoo Finance
+            // PRIORITY 2: Yahoo Finance
             // OPTIMIZATION: Use incremental fetch if we have some history
             val startDate = latest?.let { (it.date / 1000) } 
             
@@ -99,18 +86,7 @@ class StockRepositoryImpl @Inject constructor(
                 .sortedBy { it.date }
         }
 
-        // Fetch remote
-        // Try Alpha Vantage first if key exists
-        val avKey = settingsManager.alphaVantageApiKey
-        if (avKey.isNotEmpty()) {
-            val avTicker = convertToAvTicker(symbol)
-            val avHistory = alphaVantageSource.getHistory(avTicker)
-            if (avHistory.isNotEmpty()) {
-                dao.insertPrices(avHistory.map { it.toEntity().copy(symbol = symbol) })
-                return avHistory.distinctBy { it.date }.sortedBy { it.date }
-            }
-        }
-
+        // Fetch from Yahoo Finance (sole remote history source)
         val remote = remoteSource.getHistory(symbol)
         dao.insertPrices(remote.map { it.toEntity() })
         return remote.distinctBy { it.date }.sortedBy { it.date }
@@ -160,157 +136,80 @@ class StockRepositoryImpl @Inject constructor(
             onLog("📥 Downloading full history for $newStocksCount new symbols...")
         }
         
-        // 2. Fetch Remote (Hybrid: Alpha Vantage Priority -> Yahoo Fallback)
+        // 2. Fetch Remote — Yahoo Finance (sole remote history source)
         val validRemoteData = mutableMapOf<String, List<StockQuote>>()
-        val yahooRequests = mutableMapOf<String, Long?>()
-        val avKey = settingsManager.alphaVantageApiKey
-        
+
         if (requests.isNotEmpty()) {
-            // CIRCUIT BREAKER for Alpha Vantage
-            // If we hit rate limit multiple times, stop trying to save time.
-            var avCircuitOpen = avKey.isEmpty() // Open = Don't use AV
-            var avConsecutiveFailures = 0
-            val AV_FAILURE_THRESHOLD = 3
-            
-            // Limit AV calls in this batch to avoid immediate blocking if user has Free Tier (5/min)
-            // We'll try to fetch top 5 important stocks or just first 5.
-            var avCallsMade = 0
-            val AV_BATCH_LIMIT = 5 
-
             val semaphore = kotlinx.coroutines.sync.Semaphore(3) // BATTERY SAVER: Max 3 concurrent network requests
-            
-            // Chunking requests to further reduce load (Process 5 symbols at a time)
-            val requestChunks = requests.toList().chunked(5)
+            val yahooRequests = requests // All symbols go directly to Yahoo
 
-            for (chunk in requestChunks) {
-                // Parallelize within the small chunk
-                coroutineScope {
-                    chunk.map { (symbol, date) ->
-                        async {
-                            semaphore.acquire()
-                            try {
-                                var fetched = false
-                                // Try Alpha Vantage
-                                if (!avCircuitOpen && avCallsMade < AV_BATCH_LIMIT) {
-                                    try {
-                                        val avTicker = convertToAvTicker(symbol)
-                                        val avHistory = alphaVantageSource.getHistory(avTicker)
-                                        
-                                        if (avHistory.isNotEmpty()) {
-                                            val mappedHistory = avHistory.map { it.toEntity().copy(symbol = symbol).toDomain() }
-                                            synchronized(validRemoteData) {
-                                                validRemoteData[symbol] = mappedHistory
-                                            }
-                                            fetched = true
-                                            // Atomically update shared counters
-                                            synchronized(this@StockRepositoryImpl) {
-                                                avCallsMade++
-                                                avConsecutiveFailures = 0
-                                            }
-                                            onLog("⬇️ Fetched $symbol from Alpha Vantage.")
-                                        } else {
-                                            synchronized(this@StockRepositoryImpl) {
-                                                avConsecutiveFailures++
-                                                if (avConsecutiveFailures >= AV_FAILURE_THRESHOLD) {
-                                                    avCircuitOpen = true
-                                                    onLog("⚠️ Alpha Vantage Limit Reached. Switching to Yahoo Finance.")
-                                                }
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        synchronized(this@StockRepositoryImpl) { avConsecutiveFailures++ }
-                                    }
-                                }
-                                
-                                if (!fetched) {
-                                    synchronized(yahooRequests) {
-                                        yahooRequests[symbol] = date
-                                    }
-                                }
-                            } finally {
-                                semaphore.release()
-                            }
-                        }
-                    }.awaitAll()
-                }
-                // Small delay between chunks to let CPU cool down
-                kotlinx.coroutines.delay(100) 
-            }
-            
-            // 3. Fallback Batch Fetch (Yahoo)
-            if (yahooRequests.isNotEmpty()) {
-                if (avCallsMade > 0) {
-                     onLog("🔄 Fallback to Yahoo Finance for remaining ${yahooRequests.size} symbols.")
-                }
-                
-                try {
-                    val yahooData = remoteSource.getHistories(yahooRequests)
-                    // Merge Yahoo data
-                    for ((sym, quotes) in yahooData) {
-                        if (quotes.isNotEmpty()) {
-                            validRemoteData[sym] = quotes
-                        }
-                    }
-                } catch (e: Exception) {
-                    onLog("❌ Yahoo Fallback Failed: ${e.message}")
-                }
-            }
-            
-            // 4. Save & Merge
             try {
-                // DATA INTEGRITY: Filter out invalid quotes
-                 val finalValidData = validRemoteData.filterValues { quotes -> 
-                     quotes.isNotEmpty() && quotes.all { it.close > 0.0 }
-                 }
-                
-                // STALE DATA STORM PROTECTION
-                var freshCount = 0
-                var totalChecked = 0
-                val now = System.currentTimeMillis()
-                // Relaxed to 96 hours (4 days) to handle Weekends + Market Holidays
-                val staleThreshold = 96 * 60 * 60 * 1000L 
-                
-                for (quotes in finalValidData.values) {
-                     val lastDate = quotes.last().date
-                     if ((now - lastDate) < staleThreshold) {
-                         freshCount++
-                     }
-                     totalChecked++
-                }
-                
-                if (totalChecked > 10 && (freshCount.toDouble() / totalChecked) < 0.5) {
-                    onLog("⚠️ Market Data might be stale (> 4 days old). Only $freshCount/$totalChecked symbols are fresh.")
-                }
-
-                // Save to DB
-                val allNewEntities = finalValidData.values.flatten().map { it.toEntity() }
-                if (allNewEntities.isNotEmpty()) {
-                    dao.insertPrices(allNewEntities)
-                }
-                
-                // Update Result Map
-                var totalNewCandles = 0
-                for ((symbol, newQuotes) in finalValidData) {
-                    totalNewCandles += newQuotes.size
-                    val existing = resultMap[symbol]
-                    if (existing != null) {
-                        resultMap[symbol] = (existing + newQuotes)
-                            .distinctBy { it.date }
-                            .sortedBy { it.date }
-                    } else {
-                        resultMap[symbol] = newQuotes
+                val yahooData = remoteSource.getHistories(yahooRequests)
+                for ((sym, quotes) in yahooData) {
+                    if (quotes.isNotEmpty()) {
+                        validRemoteData[sym] = quotes
                     }
                 }
-                
-                if (totalNewCandles > 0) {
-                    onLog("✅ Synced $totalNewCandles new candles across ${finalValidData.size} symbols.")
+                val failedSyms = requests.keys.filter { it !in yahooData || yahooData[it].isNullOrEmpty() }
+                if (failedSyms.isNotEmpty()) {
+                    onLog("⚠️ Yahoo Finance: no data for ${failedSyms.size} symbols (${failedSyms.take(3).joinToString()}…)")
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
-                onLog("❌ Data Save Failed: ${e.message}")
+                onLog("❌ Yahoo Finance history fetch failed: ${e.message}")
             }
         }
-        
+        // 3. Save & Merge
+        try {
+            // DATA INTEGRITY: Filter out invalid quotes
+            val finalValidData = validRemoteData.filterValues { quotes ->
+                quotes.isNotEmpty() && quotes.all { it.close > 0.0 }
+            }
+
+            // STALE DATA STORM PROTECTION
+            var freshCount = 0
+            var totalChecked = 0
+            val now = System.currentTimeMillis()
+            // Relaxed to 96 hours (4 days) to handle Weekends + Market Holidays
+            val staleThreshold = 96 * 60 * 60 * 1000L
+
+            for (quotes in finalValidData.values) {
+                val lastDate = quotes.last().date
+                if ((now - lastDate) < staleThreshold) freshCount++
+                totalChecked++
+            }
+
+            if (totalChecked > 10 && (freshCount.toDouble() / totalChecked) < 0.5) {
+                onLog("⚠️ Market Data might be stale (> 4 days old). Only $freshCount/$totalChecked symbols are fresh.")
+            }
+
+            // Save to DB
+            val allNewEntities = finalValidData.values.flatten().map { it.toEntity() }
+            if (allNewEntities.isNotEmpty()) {
+                dao.insertPrices(allNewEntities)
+            }
+
+            // Update Result Map
+            var totalNewCandles = 0
+            for ((symbol, newQuotes) in finalValidData) {
+                totalNewCandles += newQuotes.size
+                val existing = resultMap[symbol]
+                if (existing != null) {
+                    resultMap[symbol] = (existing + newQuotes)
+                        .distinctBy { it.date }
+                        .sortedBy { it.date }
+                } else {
+                    resultMap[symbol] = newQuotes
+                }
+            }
+
+            if (totalNewCandles > 0) {
+                onLog("✅ Synced $totalNewCandles new candles across ${finalValidData.size} symbols.")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            onLog("❌ Data Save Failed: ${e.message}")
+        }
+
         return resultMap
     }
 
@@ -330,13 +229,28 @@ class StockRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getSentimentScore(symbol: String): Double {
-        val avTicker = convertToAvTicker(symbol)
-        return alphaVantageSource.getSentimentScore(avTicker)
-    }
+    /**
+     * News sentiment removed with Alpha Vantage (Mar 2026).
+     * NewsSentimentStrategy returns neutral (0.0) — it will not win the tournament
+     * and will be excluded naturally by the fitness function.
+     */
+    override suspend fun getSentimentScore(symbol: String): Double = 0.0
 
-    override suspend fun getInflationRate(): Double {
-        return alphaVantageSource.getInflationRate()
+    /**
+     * India CPI via World Bank FP.CPI.TOTL.ZG (annual %).
+     * Logs a visible simulation warning when the World Bank API is unavailable.
+     * @param onLog optional sim-log callback so the warning shows in the app's log UI.
+     */
+    override suspend fun getInflationRate(onLog: ((String) -> Unit)?): Double {
+        val result = worldBankSource.getIndianInflationRate()
+        if (result.isFallback) {
+            android.util.Log.w("StockRepositoryImpl",
+                "⚠️ World Bank CPI unavailable — using fallback ${WorldBankSource.INDIA_CPI_FALLBACK}%")
+            onLog?.invoke("⚠️ World Bank CPI fetch failed — using fallback ${WorldBankSource.INDIA_CPI_FALLBACK}% for regime detection. Accuracy may be reduced.")
+        } else {
+            onLog?.invoke("🌍 India CPI (${result.year}): ${result.value}% (World Bank)")
+        }
+        return result.value
     }
 
     // --- Dynamic Universe Implementation ---
@@ -438,7 +352,13 @@ class StockRepositoryImpl @Inject constructor(
                 fundamentalsCache[sym] = data to System.currentTimeMillis()
                 results[sym] = data
             }
+            val failedFundamentals = uncachedSymbols.filter { it !in freshData }
             onLog("📑 Fetched ${freshData.size}/${uncachedSymbols.size} fundamentals. Quality filter ready.")
+            if (failedFundamentals.isNotEmpty()) {
+                val preview = failedFundamentals.take(5).joinToString()
+                val more = if (failedFundamentals.size > 5) " …and ${failedFundamentals.size - 5} more" else ""
+                onLog("⚠️ No fundamentals for ${failedFundamentals.size} symbols: $preview$more — they pass quality filter by default (data unavailable).")
+            }
         }
 
         return results

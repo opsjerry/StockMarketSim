@@ -72,5 +72,24 @@ class StockMarketSimApp : Application(), Configuration.Provider {
             androidx.work.ExistingPeriodicWorkPolicy.KEEP,
             modelUpdaterRequest
         )
+
+        // 4. Intra-Day Stop-Loss Checker (every 30 min, active during 09:15–15:30 IST)
+        // The worker returns success() when outside market hours, so the 30-min schedule
+        // never phase-locks (unlike the 12-h DailySimulationWorker). See app_bible §9.
+        val intradayRequest = androidx.work.PeriodicWorkRequestBuilder<com.example.stockmarketsim.worker.IntradayStopLossWorker>(
+            30, java.util.concurrent.TimeUnit.MINUTES
+        )
+            .setConstraints(constraints)
+            .setBackoffCriteria(
+                androidx.work.BackoffPolicy.LINEAR,
+                5, java.util.concurrent.TimeUnit.MINUTES
+            )
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            "IntradayStopLoss",
+            androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+            intradayRequest
+        )
     }
 }

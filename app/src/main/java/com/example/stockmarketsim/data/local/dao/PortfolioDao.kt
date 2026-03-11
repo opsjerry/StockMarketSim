@@ -17,4 +17,8 @@ interface PortfolioDao {
     
     @Query("DELETE FROM portfolio_items WHERE simulationId = :simulationId")
     suspend fun clearPortfolio(simulationId: Int)
+
+    /** Intra-day trailing peak update — called by IntradayStopLossWorker when price moves higher. */
+    @Query("UPDATE portfolio_items SET highestPrice = :newHighest WHERE simulationId = :simId AND symbol = :symbol AND highestPrice < :newHighest")
+    suspend fun updateHighestPrice(simId: Int, symbol: String, newHighest: Double)
 }

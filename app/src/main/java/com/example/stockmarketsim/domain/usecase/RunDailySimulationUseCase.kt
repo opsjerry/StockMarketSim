@@ -69,6 +69,18 @@ class RunDailySimulationUseCase @Inject constructor(
             }
         }
 
+        // Data coverage report — surfaces history failures to the sim log
+        val failedHistorySymbols = universe.filter { it !in marketData }
+        if (failedHistorySymbols.isNotEmpty()) {
+            val preview = failedHistorySymbols.take(5).joinToString()
+            val more = if (failedHistorySymbols.size > 5) " …and ${failedHistorySymbols.size - 5} more" else ""
+            logManager.logToAll(activeIds,
+                "⚠️ No price history for ${failedHistorySymbols.size} symbols: $preview$more — excluded from analysis.")
+        }
+        val coveragePct = if (universe.isNotEmpty()) marketData.size * 100 / universe.size else 0
+        logManager.logToAll(activeIds,
+            "📈 Market data ready: ${marketData.size}/${universe.size} symbols ($coveragePct% coverage).")
+
         val benchmarkSymbol = StockUniverse.BENCHMARK_INDEX // "^NSEI"
         val benchmarkHistory = stockRepository.getStockHistory(benchmarkSymbol, TimeFrame.DAILY, 365)
 

@@ -22,7 +22,6 @@ fun SettingsScreen(
     onNavigateToManageUniverse: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val apiKey by viewModel.apiKey.collectAsState()
     val indianApiKey by viewModel.indianApiKey.collectAsState()
 
     // Zerodha State
@@ -58,23 +57,6 @@ fun SettingsScreen(
             // --- API CONFIGURATION ---
             SettingsSectionHeader("API Configuration")
             
-            OutlinedTextField(
-                value = apiKey,
-                onValueChange = { viewModel.updateApiKey(it) },
-                label = { Text("Alpha Vantage API Key") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                singleLine = true,
-                placeholder = { Text("Enter API Key") }
-            )
-            
-            Text(
-                text = "Required for Sentinel Analysis & Inflation Data.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 16.dp, end = 16.dp)
-            )
 
             OutlinedTextField(
                 value = indianApiKey,
@@ -88,7 +70,7 @@ fun SettingsScreen(
             )
             
             Text(
-                text = "Primary source for P/E, ROE, D/E, MarketCap & Sentiment. Falls back to Yahoo Finance if blank or rate-limited. 7-day Room cache.",
+                text = "Primary source for P/E, ROE, D/E, MarketCap. Falls back to Yahoo Finance if blank or rate-limited. 7-day Room cache. India CPI sourced from World Bank (no key needed).",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 16.dp, end = 16.dp)
@@ -231,9 +213,9 @@ fun SettingsSectionHeader(title: String) {
 fun AboutDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { 
+        title = {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text("📊 Intelligence Engine v3.1", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
+                Text("📊 Auto-Pilot Simulator v3.5", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
             }
         },
         text = {
@@ -242,130 +224,179 @@ fun AboutDialog(onDismiss: () -> Unit) {
                     .verticalScroll(rememberScrollState())
                     .fillMaxWidth()
             ) {
-                Text("WHAT'S NEW", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Live Trading
-                Text("🚀 Live Trading Support (Beta)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+
+                // ── HOW IT WORKS ─────────────────────────────────────────────
+                Text("HOW IT WORKS", style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    "Seamless integration with Zerodha Kite Connect. Execute real trades based on strategy signals with institutional-grade security (EncryptedSharedPreferences).",
+                    "Every weekday the app runs 5 steps automatically — you don't need to do anything.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Incremental Sync
-                Text("⚡ High-Frequency Data Sync", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                 Text(
-                    "New incremental fetch engine reduces data usage by 99% and eliminates UI freezes. Checks only for missing candles (Delta-Fetch).",
+                    "1️⃣  Health Check",
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Text(
+                    "Scans 100 NSE stocks. Companies with weak profitability (ROE < 12%) or too much debt (D/E > 1.0) are removed. Only healthy companies can be bought.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Deep Learning
-                Text("🧠 Deep Learning Forecasts", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text("2️⃣  Strategy Battle", style = MaterialTheme.typography.labelLarge)
                 Text(
-                    "Native TensorFlow Keras Deep Neural Network predicts T+1 success probabilities based on 6 daily tabular features.",
+                    "23+ trading strategies (momentum, RSI, Bollinger Bands, AI deep learning, etc.) compete by backtesting against recent price history. The one that would have made the most money — matched to your target return — becomes the Auto-Pilot.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Phase 12: Code Review Fixes
-                Text("🛡️ Stability & Safety (v2.1)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text("3️⃣  Portfolio Build", style = MaterialTheme.typography.labelLarge)
                 Text(
-                    "Market hours guard (NSE 9:15–15:30 IST), integer share safety for live orders, SMA(200) macro regime detection, auto-refresh data tokens, and connection timeout protection.",
+                    "The winning strategy picks up to 20 stocks. Stocks that move less (lower volatility) get larger positions. Maximum 10% of your portfolio in any single stock to stay diversified.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Phase 13: Quant Improvements
-                Text("📈 Quant Edge (v2.3)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text("4️⃣  Risk Guard (Stop-Loss)", style = MaterialTheme.typography.labelLarge)
                 Text(
-                    "Signal-proportional sizing (stronger signals → bigger positions), Monday-only rebalancing (80% less churn), corrected MACD signal line (true EMA-9), and 365-day data window for 52-week breakout strategy.",
+                    "Every stock gets an automatic exit price. If a stock falls too far from its recent peak, it is sold automatically to protect your capital. New positions get a wider buffer for their first 3 days.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Phase 14: P2 Quality + Fee Scoring
-                Text("🔬 Quality & Fee Intelligence (v2.4)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text("5️⃣  Intra-Day Watch", style = MaterialTheme.typography.labelLarge)
                 Text(
-                    "Fundamental quality filter (ROE ≥ 12%, D/E ≤ 1.0) via Yahoo Finance quoteSummary API. Zerodha paid API ready as fallback. Fee-adjusted tournament scoring penalizes high-churn strategies (0.4% per trade drag).",
+                    "Every 30 minutes during market hours (9:15 AM – 3:30 PM IST), live prices are checked. If a stop is breached continuously for ~30 minutes it sells immediately — not waiting until end of day.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(8.dp))
 
-                // Phase 15: Regression Suite
-                Text("✅ Robustness Upgrade (v2.5)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                Text(
-                    "Comprehensive 166-point regression test suite covers all domain logic. Fixed critical bugs in Backtester return calculation, aligned Benchmark data, and standardized ATR risk parameters per Expert Panel review.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Phase 16: Deep Neural Net Migration
-                Text("🤖 TensorFlow Lite Native Engine (v2.6)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                Text(
-                    "Migrated Machine Learning architecture from XGBoost to Native Keras Deep Neural Networks for perfect zero-allocation TFLite integration and optimized 24-byte payload mapping.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Phase 17: Quant Guard
-                Text("🛡️ Sticky ML Anchor & Circuit Breaker (v2.7)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                Text(
-                    "Implemented Quant logic to prevent strategy whiplash. The Deep Learning model acts as the portfolio anchor and requires any legacy challenger strategy to beat its Alpha by ≥ 1.5x before allowing a regime shift.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Phase 18: Multi-Factor ML + API Integration
-                Text("🧬 Multi-Factor ML Architecture (v3.0)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                Text(
-                    "Upgraded the ML feature vector from 60 (log returns) to 64 inputs: RSI(14), SMA Ratio (50/200), ATR%(14), and Relative Volume(20) are now wired into the LSTM model alongside price data. Dynamic ByteBuffer eliminates model-shape rigidity.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text("📡 Smart Fundamentals Pipeline (v3.0)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                Text(
-                    "Real-time fundamentals from IndianAPI.in (P/E, ROE, D/E, MarketCap, Analyst Sentiment) with 1 req/sec throttle. Room-persisted 7-day cache. Yahoo Finance as automatic fallback. Zero mock data — stocks with no data from any source are skipped.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text("🎯 Risk-Appetite Scoring (v3.1)", style = MaterialTheme.typography.labelLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                Text(
-                    "Your target return now drives strategy selection. Conservative (≤15%) weights Sharpe 70% for stability. Balanced (15-30%) weights equally. Aggressive (>30%) weights Alpha 80% for growth.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                
                 Divider(modifier = Modifier.padding(vertical = 12.dp))
-                
-                Text("CORE SYSTEMS", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary)
-                Text("• 22+ Strategy Variants (Momentum, RSI, Bollinger, Volume, ML)", style = MaterialTheme.typography.bodySmall)
-                Text("• 64-Feature Multi-Factor LSTM (Log Returns + 4 TA Indicators)", style = MaterialTheme.typography.bodySmall)
-                Text("• Real Fundamentals: IndianAPI.in → Yahoo Finance → Room Cache", style = MaterialTheme.typography.bodySmall)
-                Text("• Risk-Appetite-Weighted Tournament + Weekly Rebalancing", style = MaterialTheme.typography.bodySmall)
-                Text("• ATR Trailing Stops + 7% Hard Stop + 30% Sector Cap", style = MaterialTheme.typography.bodySmall)
-                Text("• Regime Filter (SMA-200 + Volatility + CPI) — Zero-Allocation", style = MaterialTheme.typography.bodySmall)
-                
+
+                // ── READING YOUR LOGS ─────────────────────────────────────────
+                Text("READING YOUR LOGS", style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                LogEntry("🌅 Starting Daily Market Analysis…",
+                    "The daily run has begun for all your simulations.")
+                LogEntry("📑 Fetching fundamentals for 100 symbols…",
+                    "Downloading financial data (profit, debt) for every stock in the universe.")
+                LogEntry("🧹 Filtered out X low-quality stocks",
+                    "X companies were dropped because their financials were too weak. The remaining stocks are eligible for selection.")
+                LogEntry("🏎️ Auto-Pilot: Running Strategy Tournament…",
+                    "All strategies are being tested against historical data to find the best one right now.")
+                LogEntry("📊 Tournament Phase 1/2 & 2/2",
+                    "Phase 1 trains on older data; Phase 2 tests on recent data. Both must pass to avoid picking a 'lucky' strategy.")
+                LogEntry("🚀 FAST START: Immediate deployment triggered",
+                    "Your portfolio was empty (new simulation or reset). The app invests right away instead of waiting for Monday.")
+                LogEntry("✅ Strategy selected X stocks. Top: [A, B, C]",
+                    "The winning strategy chose X stocks to buy. A, B, C are the top picks by allocation.")
+                LogEntry("📊 Analysis Complete: Target X stocks. Stops triggered: N",
+                    "The daily run finished. N sell orders were triggered by stop-losses today.")
+                LogEntry("⏳ Mid-week: holding current positions",
+                    "Today is not Monday. No new buys — the app only sells if a stop-loss fires.")
+                LogEntry("🟢 BUY STOCK @ ₹X | Qty: N | Value: ₹Y",
+                    "A stock was purchased. Your simulated cash decreased by ₹Y.")
+                LogEntry("🔴 SELL STOCK @ ₹X | … (Stop-Loss)",
+                    "A stock fell below its protection price and was sold to limit the loss.")
+                LogEntry("⚡ INTRADAY STOP: STOCK breached ATR stop",
+                    "During live market hours, a stock stayed below its safety price for 30+ minutes. It was sold without waiting for end of day.")
+                LogEntry("⚡ First breach detected for STOCK — Awaiting confirmation",
+                    "A stock just crossed its stop price for the first time today. The app waits one more 30-min check before selling, to avoid reacting to a brief spike.")
+                LogEntry("⚡ Fast-Bear triggered: Nifty −X% in 20 days",
+                    "The Nifty index dropped sharply in a short period — a crash signal. The app shifts to defensive mode immediately without waiting weeks for confirmation.")
+                LogEntry("🐻 Bear Market — switching to defensive mode",
+                    "The broad market is in a sustained downtrend. The app reduces exposure to 50% cash and favours stable stocks.")
+                LogEntry("🌍 India CPI (YEAR): X% (World Bank)",
+                    "Inflation data was downloaded successfully. If it exceeds 6% (RBI's upper limit), the app treats it as a headwind for equities.")
+                LogEntry("⚠️ World Bank CPI fetch failed — using fallback 4.5%",
+                    "Inflation data couldn't be downloaded (network issue). A safe mid-range default is used. No action needed from you.")
+                LogEntry("📈 Market data ready: X/100 symbols (X% coverage)",
+                    "Price history loaded for X stocks. Stocks with no history are skipped for safety.")
+                LogEntry("⚠️ No fundamentals for X symbols: A, B, C…",
+                    "Financial data for these specific stocks couldn't be fetched. They're still eligible — the app gives them the benefit of the doubt.")
+                LogEntry("⚠️ No live price for STOCK — stop check deferred",
+                    "The real-time price feed couldn't reach this stock. Its stop-loss will be checked at end of day instead.")
+                LogEntry("⚠️ Market Data might be stale (> 4 days old)",
+                    "Price history looks older than expected — possibly a prolonged holiday. The app continues, but results may lag slightly.")
+
+                Divider(modifier = Modifier.padding(vertical = 12.dp))
+
+                // ── WHY THINGS HAPPEN ─────────────────────────────────────────
+                Text("WHY THINGS HAPPEN", style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.secondary)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    "• Buys only happen on Mondays. Mid-week you'll only see sells (stop-losses).",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "• Stop-loss width is based on the stock's normal daily movement (ATR). A volatile stock gets a wider stop so it isn't sold on normal swings.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "• A stop only fires after two consecutive checks (≈60 min) below the level — preventing panic sells on a brief intra-day spike.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "• The strategy changes every Monday. This is intentional — the market changes and the best approach changes with it.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "• 'Equity' = your cash + the current market value of everything you hold.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "• If fewer than 20 stocks appear in the portfolio, some were skipped because their allocated amount wasn't enough to buy even 1 full share at that day's price.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("See full documentation in `app_bible.md`", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    "Full technical documentation: app_bible.md",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Close") }
         }
     )
+}
+
+/**
+ * A compact two-line row explaining a simulation log entry.
+ * @param emoji The log line prefix (emoji + starting text).
+ * @param meaning Plain-English explanation for a non-technical user.
+ */
+@Composable
+private fun LogEntry(emoji: String, meaning: String) {
+    Column(modifier = Modifier.padding(bottom = 6.dp)) {
+        Text(
+            text = emoji,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = meaning,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+    }
 }
