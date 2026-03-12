@@ -38,6 +38,7 @@ class TournamentUseCaseRegressionTest {
         override suspend fun syncUniverseFromDiscovery(onLog: (String) -> Unit): Int = 0
         override suspend fun addStockToUniverse(symbol: String) {}
         override suspend fun removeStockFromUniverse(symbol: String) {}
+        override suspend fun getInflationRate(onLog: ((String) -> Unit)?): Double = 0.0
     }
 
 

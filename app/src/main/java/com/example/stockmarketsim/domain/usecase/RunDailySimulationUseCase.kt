@@ -321,10 +321,11 @@ class RunDailySimulationUseCase @Inject constructor(
                 simulationRepository.updateSimulation(currentSim.copy(currentAmount = holdCash, totalEquity = holdTotal))
                 holdTxList.forEach { transactionDao.insertTransaction(it) }
                 simulationRepository.insertHistory(sim.id, System.currentTimeMillis(), holdTotal)
-                if (currentSim.isLiveTradingEnabled && holdTxList.isNotEmpty()) {
-                    notificationManager.sendNotification("Live Trading Executed", "Executed ${holdTxList.size} stop-loss trades for ${currentSim.name}.")
+                if (holdTxList.isNotEmpty()) {
+                    val title = if (currentSim.isLiveTradingEnabled) "Live Trading Executed" else "Paper Trade Alert"
+                    notificationManager.sendNotification(title, "Executed ${holdTxList.size} stop-loss trades for ${currentSim.name}.")
                 }
-                logManager.log(sim.id, "🌙 Market Closed. Portfolio Value: ₹${"%,.2f".format(holdTotal)}")
+                logManager.log(sim.id, "🏁 Cycle Complete. Portfolio Value: ₹${"%,.2f".format(holdTotal)}")
                 continue
             }
 
@@ -387,13 +388,15 @@ class RunDailySimulationUseCase @Inject constructor(
 
             simulationRepository.insertHistory(sim.id, System.currentTimeMillis(), totalEquity)
 
-            logManager.log(sim.id, "🌙 Market Closed. Portfolio Value: ₹${"%,.2f".format(totalEquity)}")
+            logManager.log(sim.id, "🏁 Cycle Complete. Portfolio Value: ₹${"%,.2f".format(totalEquity)}")
 
-            if (currentSim.isLiveTradingEnabled) {
+            if (transactions.isNotEmpty()) { // Changed from currentSim.isLiveTradingEnabled to transactions.isNotEmpty()
+                val title = if (currentSim.isLiveTradingEnabled) "Live Trades Executed" else "Paper Trades Alert"
+                val mode = if (currentSim.isLiveTradingEnabled) "via Zerodha." else "(Virtual - Manual Action Required)"
                  notificationManager.sendNotification(
-                    "Live Trading Executed",
-                    "Executed ${transactions.size} trades for ${currentSim.name}."
-                )
+                         title,
+                         "Executed ${transactions.count { it.type == "BUY" }} Buys, ${transactions.count { it.type == "SELL" }} Sells for ${currentSim.name} $mode"
+                 )
             }
 
           } catch (e: kotlinx.coroutines.CancellationException) {

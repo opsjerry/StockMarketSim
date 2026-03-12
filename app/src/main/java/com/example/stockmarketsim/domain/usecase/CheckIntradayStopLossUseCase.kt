@@ -35,7 +35,8 @@ class CheckIntradayStopLossUseCase @Inject constructor(
     private val zerodhaSource: ZerodhaSource,
     private val logManager: SimulationLogManager,
     private val transactionDao: TransactionDao,
-    private val portfolioDao: PortfolioDao
+    private val portfolioDao: PortfolioDao,
+    private val notificationManager: com.example.stockmarketsim.data.manager.AppNotificationManager
 ) {
     // 2-check confirmation filter: "simId:symbol" → timestamp of first breach.
     // In-memory only — resets on app restart (acceptable; RestartResilience §7H).
@@ -176,6 +177,13 @@ class CheckIntradayStopLossUseCase @Inject constructor(
                     sim.copy(currentAmount = updatedCash, totalEquity = newTotalEquity)
                 )
                 simulationRepository.insertHistory(sim.id, System.currentTimeMillis(), newTotalEquity)
+
+                val title = if (sim.isLiveTradingEnabled) "Live Intraday Stop Hit" else "Paper Intraday Stop Hit"
+                val mode = if (sim.isLiveTradingEnabled) "via Zerodha" else "(Virtual - Manual Action Required)"
+                notificationManager.sendNotification(
+                    title,
+                    "Executed ${stopTriggers.size} intra-day stop-loss sell(s) for ${sim.name} $mode."
+                )
             }
         }
 
