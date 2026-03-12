@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <include domain="database" path="."/>
+        <!-- Settings survive reinstall/restore from Google account -->
         <include domain="sharedpref" path="."/>
+        <!-- Exclude DB: emulator test data must not bleed onto real phones via Google Backup -->
+        <exclude domain="database" path="."/>
     </cloud-backup>
     <device-transfer>
+        <!-- Keep everything for phone-to-phone transfers (user expects their data to move) -->
         <include domain="database" path="."/>
         <include domain="sharedpref" path="."/>
     </device-transfer>

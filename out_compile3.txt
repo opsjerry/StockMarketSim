@@ -1,0 +1,61 @@
+> Task :app:checkKotlinGradlePluginConfigurationErrors
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kaptGenerateStubsDebugKotlin
+> Task :app:kaptDebugKotlin UP-TO-DATE
+
+> Task :app:compileDebugKotlin FAILED
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:75:37 Unresolved reference: rememberNavController
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:79:70 Unresolved reference: currentBackStackEntryAsState
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:124:45 Unresolved reference: popUpTo
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:124:130 Unresolved reference: inclusive
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:140:49 Unresolved reference: popUpTo
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:157:49 Unresolved reference: popUpTo
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:171:45 Unresolved reference: popUpTo
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:187:25 Unresolved reference: composable
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:188:82 @Composable invocations can only happen from the context of a @Composable function
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:204:25 Unresolved reference: composable
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:205:81 @Composable invocations can only happen from the context of a @Composable function
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:212:25 Unresolved reference: composable
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:215:29 Cannot infer a type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:217:79 @Composable invocations can only happen from the context of a @Composable function
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:226:25 Unresolved reference: composable
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:229:29 Cannot infer a type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:231:81 @Composable invocations can only happen from the context of a @Composable function
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:236:41 Unresolved reference: popUpTo
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:244:25 Unresolved reference: composable
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:245:81 @Composable invocations can only happen from the context of a @Composable function
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:255:25 Unresolved reference: composable
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:256:81 @Composable invocations can only happen from the context of a @Composable function
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:263:25 Unresolved reference: composable
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:266:29 Cannot infer a type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/jerin/.gemini/antigravity/scratch/StockMarketSim/app/src/main/java/com/example/stockmarketsim/MainActivity.kt:268:77 @Composable invocations can only happen from the context of a @Composable function
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 3s
+17 actionable tasks: 3 executed, 14 up-to-date

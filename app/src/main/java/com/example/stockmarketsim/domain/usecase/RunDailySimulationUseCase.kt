@@ -89,7 +89,7 @@ class RunDailySimulationUseCase @Inject constructor(
         val isBearMarket = regimeSignal == RegimeSignal.BEARISH
 
         if (isBearMarket) {
-            logManager.logToAll(activeIds, "🐻 Bear Market Detected! Switching to safety mode (selling risky assets).")
+            logManager.logToAll(activeIds, "🐻 Bear Market Detected! Switching to safety mode (Targeting 0% equity exposure).")
         }
 
         // 3. Scheduling — compute once
@@ -208,7 +208,11 @@ class RunDailySimulationUseCase @Inject constructor(
             }
 
             var targetAllocations = if (isBearMarket) {
-                logManager.log(sim.id, "🐻 Bear Market: Selling all positions.")
+                if (portfolio.isEmpty()) {
+                    logManager.log(sim.id, "🐻 Bear Market: Holding cash (portfolio is already empty).")
+                } else {
+                    logManager.log(sim.id, "🐻 Bear Market: Selling all positions to protect capital.")
+                }
                 emptyMap()
             } else if (isRebalanceDay || isFastStart) {
                 if (isFastStart && !isRebalanceDay) {

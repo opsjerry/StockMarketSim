@@ -31,7 +31,7 @@ class TournamentUseCaseRegressionTest {
         override suspend fun getBatchStockHistory(symbols: List<String>, timeFrame: com.example.stockmarketsim.domain.model.TimeFrame, limit: Int, onLog: (String) -> Unit): Map<String, List<StockQuote>> = emptyMap()
         override suspend fun cleanupOldData(onLog: (String) -> Unit) {}
         override suspend fun getSentimentScore(symbol: String): Double = 0.0
-        override suspend fun getInflationRate(): Double = 0.0
+
         override suspend fun getFundamentals(symbol: String): com.example.stockmarketsim.domain.model.FundamentalData? = null
         override fun getActiveUniverse(): kotlinx.coroutines.flow.Flow<List<String>> = kotlinx.coroutines.flow.flowOf(emptyList())
         override suspend fun getActiveUniverseSnapshot(): List<String> = emptyList()

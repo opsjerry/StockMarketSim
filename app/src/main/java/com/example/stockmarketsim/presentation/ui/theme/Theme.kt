@@ -1,70 +1,90 @@
 package com.example.stockmarketsim.presentation.ui.theme
 
 import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 
-// Midnight Quantitative Theme Colors
-val SurfaceDark = Color(0xFF0B1120)
-val PrimaryBlue = Color(0xFF3B82F6)
-val SuccessGreen = Color(0xFF10B981)
-val ErrorRed = Color(0xFFEF4444)
+// ── Typography (system sans-serif — close to Inter on Android) ─────────────
+val AppTypography = Typography(
+    headlineLarge  = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold,      fontSize = 30.sp, lineHeight = 37.sp, letterSpacing = (-0.5).sp),
+    headlineMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold,      fontSize = 24.sp, lineHeight = 32.sp),
+    headlineSmall  = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold,  fontSize = 20.sp, lineHeight = 28.sp),
 
-private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryBlue,
-    secondary = PrimaryBlue,
-    tertiary = SuccessGreen,
-    background = SurfaceDark,
-    surface = SurfaceDark,
-    error = ErrorRed
+    titleLarge   = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 26.sp),
+    titleMedium  = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 22.sp),
+    titleSmall   = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium,   fontSize = 13.sp, lineHeight = 20.sp),
+
+    bodyLarge    = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 15.sp, lineHeight = 23.sp),
+    bodyMedium   = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 13.sp, lineHeight = 20.sp),
+    bodySmall    = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 11.sp, lineHeight = 17.sp),
+
+    labelLarge   = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = 0.1.sp),
+    labelMedium  = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium,   fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.4.sp),
+    labelSmall   = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium,   fontSize = 10.sp, lineHeight = 14.sp, letterSpacing = 0.4.sp),
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = PrimaryBlue,
-    secondary = PrimaryBlue,
-    tertiary = SuccessGreen
-    // Other default colors to override
+// ── Colour Scheme ─────────────────────────────────────────────────────────────
+private val AppDarkColorScheme = darkColorScheme(
+    primary            = ElectricBlue,
+    onPrimary          = Navy950,
+    primaryContainer   = NavyGlow,
+    onPrimaryContainer = ElectricBlue,
+
+    secondary            = CyanAccent,
+    onSecondary          = Navy950,
+    secondaryContainer   = Navy700,
+    onSecondaryContainer = NeutralSlate,
+
+    tertiary            = BullGreen,
+    onTertiary          = Navy950,
+    tertiaryContainer   = BullGreenDim,
+    onTertiaryContainer = BullGreen,
+
+    error            = BearRed,
+    onError          = Navy950,
+    errorContainer   = BearRedDim,
+    onErrorContainer = BearRed,
+
+    background           = Navy900,
+    onBackground         = androidx.compose.ui.graphics.Color.White,
+    surface              = Navy800,
+    onSurface            = androidx.compose.ui.graphics.Color.White,
+    surfaceVariant       = Navy700,
+    onSurfaceVariant     = NeutralSlate,
+    outline              = Navy600,
+    outlineVariant       = Navy600.copy(alpha = 0.5f),
+    inverseSurface       = androidx.compose.ui.graphics.Color.White,
+    inverseOnSurface     = Navy900,
+    surfaceTint          = ElectricBlue.copy(alpha = 0.04f),
 )
 
+// ── Theme ─────────────────────────────────────────────────────────────────────
 @Composable
 fun StockMarketSimTheme(
-    darkTheme: Boolean = true, // Default to Dark Mode for "Midnight Quantitative" feel
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = false, // Disable dynamic color to enforce our theme
+    darkTheme: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            window.statusBarColor = Navy950.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
         }
     }
 
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
+        colorScheme = AppDarkColorScheme,
+        typography  = AppTypography,
+        content     = content
     )
 }
