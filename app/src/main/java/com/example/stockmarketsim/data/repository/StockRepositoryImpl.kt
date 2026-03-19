@@ -79,17 +79,17 @@ class StockRepositoryImpl @Inject constructor(
     ): List<StockQuote> {
         val cached = dao.getHistory(symbol, 0) // fetch all
         if (cached.isNotEmpty()) {
-            // DEDUP GUARD: The DB unique index (symbol, date) prevents duplicates on new inserts,
-            // but this defensive step handles any stale duplicates in existing data before migration.
-            return cached.map { it.toDomain() }
+            val sorted = cached.map { it.toDomain() }
                 .distinctBy { it.date }
                 .sortedBy { it.date }
+            return if (limit > 0) sorted.takeLast(limit) else sorted
         }
 
         // Fetch from Yahoo Finance (sole remote history source)
         val remote = remoteSource.getHistory(symbol)
         dao.insertPrices(remote.map { it.toEntity() })
-        return remote.distinctBy { it.date }.sortedBy { it.date }
+        val sorted = remote.distinctBy { it.date }.sortedBy { it.date }
+        return if (limit > 0) sorted.takeLast(limit) else sorted
     }
 
 

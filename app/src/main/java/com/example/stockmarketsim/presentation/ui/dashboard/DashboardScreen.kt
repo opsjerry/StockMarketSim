@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.stockmarketsim.domain.model.Simulation
 import com.example.stockmarketsim.domain.model.SimulationStatus
+import com.example.stockmarketsim.domain.analysis.RegimeSignal
 import com.example.stockmarketsim.presentation.ui.components.GlassCard
 import com.example.stockmarketsim.presentation.ui.components.GradientProgressBar
 import com.example.stockmarketsim.presentation.ui.theme.*
@@ -41,6 +42,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val simulations by viewModel.simulations.collectAsState()
+    val marketRegime by viewModel.marketRegime.collectAsState()
 
     Scaffold(
         containerColor = Navy900,
@@ -113,6 +115,7 @@ fun DashboardScreen(
                 items(simulations) { simulation ->
                     SimulationCard(
                         simulation = simulation,
+                        marketRegime = marketRegime,
                         onClick = {
                             when (simulation.status) {
                                 SimulationStatus.ANALYZING,
@@ -190,6 +193,7 @@ private fun EmptyDashboard(modifier: Modifier = Modifier, onCreate: () -> Unit) 
 @Composable
 fun SimulationCard(
     simulation: Simulation,
+    marketRegime: RegimeSignal = RegimeSignal.NEUTRAL,
     onClick: () -> Unit,
     onDelete: () -> Unit,
     onRetry: () -> Unit
@@ -259,20 +263,22 @@ fun SimulationCard(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusBadge(simulation.status)
-                    Spacer(Modifier.width(4.dp))
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = BearRed.copy(alpha = 0.6f),
-                            modifier = Modifier.size(16.dp)
-                        )
+                        StatusBadge(simulation.status)
+                        Spacer(Modifier.width(4.dp))
+                        RegimeBadge(marketRegime)
+                        Spacer(Modifier.width(4.dp))
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = BearRed.copy(alpha = 0.6f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
-                }
             }
 
             Spacer(Modifier.height(12.dp))
@@ -368,6 +374,24 @@ private fun StatusBadge(status: SimulationStatus) {
         SimulationStatus.COMPLETED        -> Triple("✓ DONE",      BullGreenDim,     BullGreen)
         SimulationStatus.FAILED           -> Triple("✕ FAILED",    BearRedDim,       BearRed)
         else                              -> Triple(status.name,   Navy700,           NeutralSlate)
+    }
+    Surface(color = bg, shape = RoundedCornerShape(6.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = fg,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
+
+@Composable
+private fun RegimeBadge(regime: RegimeSignal) {
+    val (label, bg, fg) = when (regime) {
+        RegimeSignal.BULLISH -> Triple("🐂 BULL", BullGreenDim,  BullGreen)
+        RegimeSignal.BEARISH -> Triple("🐻 BEAR", BearRedDim,   BearRed)
+        RegimeSignal.NEUTRAL -> Triple("⚖️ NEUTRAL", Navy700, NeutralSlate)
     }
     Surface(color = bg, shape = RoundedCornerShape(6.dp)) {
         Text(

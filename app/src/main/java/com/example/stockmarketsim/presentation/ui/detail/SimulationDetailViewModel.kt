@@ -19,8 +19,22 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.example.stockmarketsim.presentation.ui.analysis.StrategyRecommendation
 import com.example.stockmarketsim.data.manager.SimulationLogManager
+import com.example.stockmarketsim.domain.analysis.RegimeFilter
+import com.example.stockmarketsim.domain.analysis.RegimeSignal
+import com.example.stockmarketsim.domain.model.StockUniverse
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlin.math.ln
+import kotlin.math.sqrt
+
+
+/** Live macroeconomic snapshot displayed in the Detail screen Auto-Pilot card. */
+data class MacroSnapshot(
+    val regime: RegimeSignal,
+    val smaDistancePct: Double,   // Nifty % above/below SMA(200); positive = uptrend
+    val volatilityPct: Double,    // 1-year annualised Historical Volatility (0–100)
+    val cpiPct: Double            // India CPI % from World Bank
+)
 
 @HiltViewModel
 class SimulationDetailViewModel @Inject constructor(
@@ -74,6 +88,14 @@ class SimulationDetailViewModel @Inject constructor(
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
 
+    // Live prices keyed by symbol — used for per-holding P&L calculation in the UI
+    private val _livePrices = MutableStateFlow<Map<String, Double>>(emptyMap())
+    val livePrices = _livePrices.asStateFlow()
+
+    // Macro snapshot for the Auto-Pilot card on the Detail screen
+    private val _macroSnapshot = MutableStateFlow<MacroSnapshot?>(null)
+    val macroSnapshot = _macroSnapshot.asStateFlow()
+
     private var currentSimulationJob: kotlinx.coroutines.Job? = null
 
     fun loadSimulation(simulationId: Int) {
@@ -106,6 +128,9 @@ class SimulationDetailViewModel @Inject constructor(
                         holdingsTotal += value
                         allocMap[item.symbol] = value
                     }
+
+                    // Publish live prices for per-holding P&L display
+                    _livePrices.value = priceMap
                     
                     val totalEq = sim.currentAmount + holdingsTotal
                     _totalEquity.value = totalEq
@@ -136,6 +161,36 @@ class SimulationDetailViewModel @Inject constructor(
                     val n = niftyHistory.size.toDouble()
                     _benchmarkReturn = Math.pow(niftyEnd / niftyStart, 252.0 / n) - 1.0
                     android.util.Log.d("StockSim", "Real Nifty benchmark return: ${"%.2f".format(_benchmarkReturn * 100)}%")
+                }
+
+                // ── MacroSnapshot: Compute and expose live regime indicators ──
+                if (niftyHistory.size >= 200) {
+                    // SMA(200) distance
+                    val currentPrice = niftyHistory.last().close
+                    val sma200 = niftyHistory.takeLast(200).map { it.close }.average()
+                    val smaDistPct = ((currentPrice - sma200) / sma200) * 100.0
+
+                    // 1-year Annualised Historical Volatility
+                    val n365 = niftyHistory.size - 1
+                    var sumR = 0.0; var sumR2 = 0.0
+                    for (i in 1 until niftyHistory.size) {
+                        val r = ln(niftyHistory[i].close / niftyHistory[i - 1].close)
+                        sumR += r; sumR2 += r * r
+                    }
+                    val meanR = sumR / n365
+                    val variance = (sumR2 / n365) - (meanR * meanR)
+                    val annualVol = sqrt(if (variance > 0) variance else 0.0) * sqrt(252.0) * 100.0
+
+                    // CPI
+                    val cpi = try { stockRepository.getInflationRate() } catch (e: Exception) { 0.0 }
+
+                    val regime = RegimeFilter.detectRegime(niftyHistory, cpi)
+                    _macroSnapshot.value = MacroSnapshot(
+                        regime = regime,
+                        smaDistancePct = smaDistPct,
+                        volatilityPct = annualVol,
+                        cpiPct = cpi
+                    )
                 }
             } catch (e: Exception) {
                 android.util.Log.w("StockSim", "Could not fetch Nifty history, using fallback 12%: ${e.message}")

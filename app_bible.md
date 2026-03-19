@@ -388,3 +388,14 @@ The daily runner (`DailySimulationWorker`) remains the **guaranteed safety net**
 - About dialog bumped to **Intelligence Engine v3.5**
 - `AlphaVantageSource.kt` **deleted** — last reference to `alphaVantageApiKey`
 
+---
+
+## ⚖️ 12. Market Regime Calibration Fixes (Added: 19 Mar 2026)
+
+### A. Regime Filter Volatility Window — `StockRepositoryImpl.kt`
+**Problem**: The historical fetch for the daily simulation ignored the `limit` parameter, pulling up to 10 years of database history into the regime filter. This caused the 2020 COVID-19 crash to permanently skew the active volatility calculation above the 20% VIX threshold, throwing the simulation into a perpetual "Bear Market Detected" state whenever the SMA was challenged.
+**Fix**: Enforced `takeLast(limit)` inside `getStockHistory()`. The `RegimeFilter` now correctly assesses the **rolling 1-year Historical Volatility (365 days)**, restoring its dynamic macro sensitivity without losing the 20-day "Fast-Bear Tripwire".
+
+### B. Live Macroeconomic Inflation Wiring — `RunDailySimulationUseCase.kt`
+**Problem**: The daily simulation passed a hardcoded `0.0` inflation rate to the `RegimeFilter`, completely bypassing the macroeconomic logic designed to cap exposure when India CPI > 6.0%.
+**Fix**: Wired the filter to fetch live data via `stockRepository.getInflationRate()`. The simulation now actively reacts to real-world inflationary tightening environments.

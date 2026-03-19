@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.stockmarketsim.data.local.entity.TransactionEntity
+import com.example.stockmarketsim.domain.analysis.RegimeSignal
 import com.example.stockmarketsim.presentation.ui.components.*
 import com.example.stockmarketsim.presentation.ui.theme.*
 import java.text.NumberFormat
@@ -51,6 +52,8 @@ fun SimulationDetailScreen(
     val alpha         by viewModel.alpha.collectAsState()
     val insufficientData by viewModel.insufficientData.collectAsState()
     val message       by viewModel.message.collectAsState()
+    val macroSnapshot by viewModel.macroSnapshot.collectAsState()
+    val livePrices    by viewModel.livePrices.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(message) { message?.let { snackbarHostState.showSnackbar(it); viewModel.clearMessage() } }
@@ -278,26 +281,60 @@ fun SimulationDetailScreen(
                             Spacer(Modifier.width(8.dp))
                             Text("Auto-Pilot: Active", style = MaterialTheme.typography.titleSmall, color = Color.White)
                         }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "Monitors strategy Alpha daily. If performance drops (Alpha < -5%), it automatically switches to a better strategy.",
-                            style = MaterialTheme.typography.bodySmall, color = NeutralSlate
-                        )
                         Spacer(Modifier.height(10.dp))
                         Divider(color = Navy600)
                         Spacer(Modifier.height(10.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(color = BullGreen.copy(alpha = 0.12f), shape = RoundedCornerShape(6.dp)) {
-                                Text(
-                                    "MARKET SENSOR ACTIVE",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = BullGreen,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+
+                        val snap = macroSnapshot
+                        if (snap != null) {
+                            val (regimeLabel, regimeColor) = when (snap.regime) {
+                                RegimeSignal.BULLISH -> "🐂 BULLISH" to BullGreen
+                                RegimeSignal.BEARISH -> "🐻 BEARISH" to BearRed
+                                RegimeSignal.NEUTRAL -> "⚖️ NEUTRAL" to NeutralSlate
+                            }
+                            val smaSign  = if (snap.smaDistancePct >= 0) "+" else ""
+                            val smaColor = if (snap.smaDistancePct >= 0) BullGreen else BearRed
+                            val volColor = if (snap.volatilityPct > 20.0) BearRed else BullGreen
+                            val cpiColor = if (snap.cpiPct > 6.0) BearRed else BullGreen
+
+                            Text("Live Macro Snapshot", style = MaterialTheme.typography.labelSmall, color = NeutralSlate)
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                MacroChip("Regime", regimeLabel, regimeColor, Modifier.weight(1f))
+                                MacroChip(
+                                    "SMA(200)",
+                                    "$smaSign${"%.1f".format(snap.smaDistancePct)}%",
+                                    smaColor,
+                                    Modifier.weight(1f)
                                 )
                             }
-                            Spacer(Modifier.width(8.dp))
-                            Text("SMA(200) + 20-day fast-bear tripwire", style = MaterialTheme.typography.labelSmall, color = NeutralSlate)
+                            Spacer(Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                MacroChip(
+                                    "1Y Vol",
+                                    "${"%.1f".format(snap.volatilityPct)}%  ❘ 20%",
+                                    volColor,
+                                    Modifier.weight(1f)
+                                )
+                                MacroChip(
+                                    "India CPI",
+                                    "${"%.1f".format(snap.cpiPct)}%  ❘ 6%",
+                                    cpiColor,
+                                    Modifier.weight(1f)
+                                )
+                            }
+                        } else {
+                            Text(
+                                "SMA(200) + 20-day fast-bear tripwire active",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = NeutralSlate
+                            )
                         }
                     }
                 }
@@ -328,6 +365,9 @@ fun SimulationDetailScreen(
                 }
             } else {
                 items(holdings.take(7)) { hold ->
+                    val livePrice = livePrices[hold.symbol] ?: hold.averagePrice
+                    val pnlPct = if (hold.averagePrice > 0) ((livePrice - hold.averagePrice) / hold.averagePrice) * 100.0 else 0.0
+                    val pnlColor = if (pnlPct >= 0) BullGreen else BearRed
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -342,9 +382,18 @@ fun SimulationDetailScreen(
                                 Text(hold.symbol.take(6), style = MaterialTheme.typography.labelMedium, color = ElectricBlue, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
                             }
                             Spacer(Modifier.width(10.dp))
-                            Text("${"%.0f".format(hold.quantity)} units", style = MaterialTheme.typography.bodySmall, color = NeutralSlate)
+                            Column {
+                                Text("${"%.0f".format(hold.quantity)} units", style = MaterialTheme.typography.bodySmall, color = NeutralSlate)
+                                val pnlSign = if (pnlPct >= 0) "+" else ""
+                                Text(
+                                    "$pnlSign${"%.1f".format(pnlPct)}%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = pnlColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
-                        Text(fmt.format(hold.quantity * (hold.averagePrice ?: 0.0)), style = MaterialTheme.typography.bodySmall, color = Color.White)
+                        Text(fmt.format(hold.quantity * livePrice), style = MaterialTheme.typography.bodySmall, color = Color.White)
                     }
                 }
             }
@@ -443,5 +492,21 @@ fun TransactionItem(txn: TransactionEntity, formatter: NumberFormat) {
             }
         }
         Text(formatter.format(txn.amount), style = MaterialTheme.typography.bodySmall, color = Color.White, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** A small titled info chip used inside the Live Macro Snapshot grid. */
+@Composable
+private fun MacroChip(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
+    Surface(
+        color = Navy700,
+        shape = RoundedCornerShape(8.dp),
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = NeutralSlate)
+            Spacer(Modifier.height(2.dp))
+            Text(value, style = MaterialTheme.typography.labelMedium, color = valueColor, fontWeight = FontWeight.Bold)
+        }
     }
 }

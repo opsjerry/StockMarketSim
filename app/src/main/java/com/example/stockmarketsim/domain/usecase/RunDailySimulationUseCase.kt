@@ -85,7 +85,10 @@ class RunDailySimulationUseCase @Inject constructor(
         val benchmarkHistory = stockRepository.getStockHistory(benchmarkSymbol, TimeFrame.DAILY, 365)
 
         // 2. Regime Filter Check (global — same market for all sims)
-        val regimeSignal = RegimeFilter.detectRegime(benchmarkHistory, 0.0)
+        val inflation = stockRepository.getInflationRate { msg -> logManager.logToAll(activeIds, msg) }
+        val regimeSignal = RegimeFilter.detectRegime(benchmarkHistory, inflation) { msg ->
+            logManager.logToAll(activeIds, msg)
+        }
         val isBearMarket = regimeSignal == RegimeSignal.BEARISH
 
         if (isBearMarket) {
