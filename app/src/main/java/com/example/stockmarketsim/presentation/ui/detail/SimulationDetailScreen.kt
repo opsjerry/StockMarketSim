@@ -146,9 +146,11 @@ fun SimulationDetailScreen(
                                 Column {
                                     Text("Active Strategy", style = MaterialTheme.typography.labelSmall, color = NeutralSlate)
                                     Text(
-                                        sim.strategyId.replace("_", " ")
+                                        sim.strategyId.replace("_", " ").lowercase()
+                                            .split(" ").joinToString(" ") { it.replaceFirstChar { c -> c.titlecase(Locale.getDefault()) } }
                                             .replace("Ml","ML").replace("Ema","EMA")
-                                            .replace("Rsi","RSI").replace("Dnn","DNN"),
+                                            .replace("Rsi","RSI").replace("Dnn","DNN")
+                                            .replace("Sma","SMA").replace("Macd","MACD").replace("Bb","BB"),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = CyanAccent,
                                         fontWeight = FontWeight.Bold

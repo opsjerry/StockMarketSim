@@ -144,6 +144,17 @@ class RunDailySimulationUseCase @Inject constructor(
             val hasNeverTraded = sim.totalEquity <= sim.currentAmount + 1.0 // within ₹1 rounding
             val isFastStart = portfolio.isEmpty() && sim.currentAmount > 1000.0 && (isRebalanceDay || hasNeverTraded)
 
+            // Bear Market: stamp strategyId as SAFE_HAVEN so the card shows the real posture.
+            // Recovery: the Monday tournament will overwrite this with the tournament winner.
+            if (isBearMarket && sim.strategyId != "SAFE_HAVEN") {
+                val bearSim = simulationRepository.getSimulationById(sim.id)?.copy(strategyId = "SAFE_HAVEN")
+                if (bearSim != null) {
+                    simulationRepository.updateSimulation(bearSim)
+                    strategyId = "SAFE_HAVEN"
+                    logManager.log(sim.id, "🐻 Strategy set to SAFE_HAVEN (Bear Market active).")
+                }
+            }
+
             val qualityUniverse = if ((isRebalanceDay || isFastStart) && !isBearMarket) {
                 // Run the sim-specific tournament with the correct per-sim target return AND duration
                 logManager.log(sim.id, "🏎️ Auto-Pilot: Running Strategy Tournament (Backtesting 40+ Strategies)...")

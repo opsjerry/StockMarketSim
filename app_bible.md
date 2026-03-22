@@ -372,30 +372,38 @@ The daily runner (`DailySimulationWorker`) remains the **guaranteed safety net**
 
 ### B. Minimum Viable Position Skip — `PortfolioRebalancer.kt`
 **Fix**: Added `if (actualBuyVal < executedPrice) continue` before `floor()`. If allocated cash can't buy 1 full share, skip and keep cash liquid. Eliminates orphan 1-share positions on expensive stocks (HDFCBANK @ ₹859 etc.).
-
 ### C. Fast-Bear 20-Day Tripwire — `RegimeFilter.kt`
-**Enhancement**: New check **before** SMA(200): if Nifty drops **>7% in 20 days** → immediate `BEARISH`. Cuts detection lag from 4–8 weeks to days for event-driven shocks (crude oil spikes, geopolitical escalation, FII outflows). Logged as `⚡ Fast-Bear triggered: Nifty −X.X% in 20 days`.
+**Enhancement**: New check **before** SMA(200): if Nifty drops **>7% in 20 days** -> immediate `BEARISH`. Cuts detection lag from 4-8 weeks to days for event-driven shocks (crude oil spikes, geopolitical escalation, FII outflows). Logged as `Fast-Bear triggered`.
 
-### D. World Bank CPI Fallback Visible in Sim Logs — `WorldBankSource.kt`, `StockRepositoryImpl.kt`
+### D. World Bank CPI Fallback Visible in Sim Logs
 `WorldBankSource.getIndianInflationRate()` now returns `CpiResult(value, isFallback, year)`. Two log paths:
-- **Success**: `🌍 India CPI (2024): 5.65% (World Bank)`
-- **Fallback**: `⚠️ World Bank CPI fetch failed — using fallback 4.5% for regime detection. Accuracy may be reduced.`
+- **Success**: `India CPI (2024): 5.65% (World Bank)`
+- **Fallback**: `World Bank CPI fetch failed - using fallback 4.5% for regime detection.`
 
 ### E. Settings Page & Alpha Vantage Fully Removed
 - `SettingsManager.alphaVantageApiKey` property deleted
-- `SettingsViewModel` AV state + `updateApiKey()` removed; `saveSettings()` now saves IndianAPI key only
-- `SettingsScreen` AV `OutlinedTextField` removed; helper text updated to mention World Bank CPI (no key needed)
+- `SettingsViewModel` AV state + `updateApiKey()` removed
+- `SettingsScreen` AV OutlinedTextField removed
 - About dialog bumped to **Intelligence Engine v3.5**
-- `AlphaVantageSource.kt` **deleted** — last reference to `alphaVantageApiKey`
+- `AlphaVantageSource.kt` **deleted**
 
 ---
 
-## ⚖️ 12. Market Regime Calibration Fixes (Added: 19 Mar 2026)
+## 12. Market Regime Calibration Fixes (Added: 19 Mar 2026)
 
-### A. Regime Filter Volatility Window — `StockRepositoryImpl.kt`
-**Problem**: The historical fetch for the daily simulation ignored the `limit` parameter, pulling up to 10 years of database history into the regime filter. This caused the 2020 COVID-19 crash to permanently skew the active volatility calculation above the 20% VIX threshold, throwing the simulation into a perpetual "Bear Market Detected" state whenever the SMA was challenged.
-**Fix**: Enforced `takeLast(limit)` inside `getStockHistory()`. The `RegimeFilter` now correctly assesses the **rolling 1-year Historical Volatility (365 days)**, restoring its dynamic macro sensitivity without losing the 20-day "Fast-Bear Tripwire".
+### A. Regime Filter Volatility Window - `StockRepositoryImpl.kt`
+**Problem**: The historical fetch ignored the `limit` parameter, pulling up to 10 years of data. The 2020 COVID-19 crash permanently skewed volatility above 20%, locking the simulation in perpetual Bear Market mode.
+**Fix**: Enforced `takeLast(limit)` inside `getStockHistory()`. Refined to HV60 in section 12C.
 
-### B. Live Macroeconomic Inflation Wiring — `RunDailySimulationUseCase.kt`
-**Problem**: The daily simulation passed a hardcoded `0.0` inflation rate to the `RegimeFilter`, completely bypassing the macroeconomic logic designed to cap exposure when India CPI > 6.0%.
-**Fix**: Wired the filter to fetch live data via `stockRepository.getInflationRate()`. The simulation now actively reacts to real-world inflationary tightening environments.
+### B. Live Macroeconomic Inflation Wiring - `RunDailySimulationUseCase.kt`
+**Problem**: The daily simulation passed a hardcoded 0.0 inflation rate to the RegimeFilter, bypassing the macroeconomic logic for India CPI > 6.0%.
+**Fix**: Wired the filter to fetch live data via `stockRepository.getInflationRate()`.
+
+### C. Volatility Window Refined to HV60 - `RegimeFilter.kt`
+**Rationale**: HV252 (1-year) retains crisis shocks for 12 months creating a "vol memory" problem. HV30 is too noisy. **HV60 (approx 1 fiscal quarter)** is the practitioner sweet spot:
+- ~60 log-return observations -> statistically sound
+- Detects genuine regime shifts within 30-45 trading days
+- Does not overlap with the 20-day Fast-Bear Tripwire
+- 20% annualized threshold unchanged
+
+**Implementation**: `RegimeFilter.detectRegime()` slices `benchmarkHistory.takeLast(61)` (61 prices = 60 log-returns) before computing variance. The full 365-day fetch is retained to anchor SMA(200) and the Fast-Bear Tripwire.
