@@ -33,3 +33,7 @@ build_output*
 test_output*
 yahoo_debug.json
 raw_data/
+
+# Cleanup
+/unwanted/
+*.log

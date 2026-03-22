@@ -134,12 +134,40 @@ object RiskEngine {
             val totalInvVol = invVolWeights.values.sum()
 
             if (totalInvVol > 0) {
-                for ((sym, invW) in invVolWeights) {
-                    // FIX: brackets ensure coerceAtMost applies to the full product,
-                    // not just totalRaw (previous bug caused KOTAKBANK to absorb 25%).
-                    allocations[sym] = ((invW / totalInvVol) * totalRaw)
-                        .coerceAtMost(maxAllocationPerStock)  // enforce per-stock cap (10% bull / 5% bear)
+                var remainingTarget = totalRaw
+                var currentInvTotal = totalInvVol
+                val finalAllocations = mutableMapOf<String, Double>()
+                val cappedSymbols = mutableSetOf<String>()
+
+                // Iterative redistribution (Water-filling algorithm)
+                var redistributed = true
+                while (redistributed && remainingTarget > 0.0001 && cappedSymbols.size < invVolWeights.size) {
+                    redistributed = false
+                    val weightPerUnit = if (currentInvTotal > 0) remainingTarget / currentInvTotal else 0.0
+
+                    for ((sym, invW) in invVolWeights) {
+                        if (sym in cappedSymbols) continue
+
+                        val proposedWeight = invW * weightPerUnit
+                        if (proposedWeight >= maxAllocationPerStock) {
+                            finalAllocations[sym] = maxAllocationPerStock
+                            cappedSymbols.add(sym)
+                            remainingTarget -= maxAllocationPerStock
+                            currentInvTotal -= invW
+                            redistributed = true
+                        }
+                    }
+
+                    if (!redistributed && currentInvTotal > 0) {
+                        // All remaining uncapped stocks get their proportional weight
+                        for ((sym, invW) in invVolWeights) {
+                            if (sym !in cappedSymbols) {
+                                finalAllocations[sym] = invW * weightPerUnit
+                            }
+                        }
+                    }
                 }
+                allocations.putAll(finalAllocations)
             } else {
                 allocations.putAll(rawAllocations)
             }

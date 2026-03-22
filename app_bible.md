@@ -80,9 +80,9 @@ Capital preservation is the mathematically optimal path to long-term growth.
 *   **Persistent Cache**: Room database with **7-day TTL**. Stale cache is preferred over no data.
 *   **Rate Limiting**: 1 request per second to IndianAPI.in. HTTP 429 triggers automatic Yahoo Finance fallback.
 *   **No Mock Data Policy**: If all sources fail and no cache exists, the stock is **skipped entirely** rather than using fabricated fundamentals.
-*   **Criteria**: ROE ≥ 12% **and** Debt/Equity ≤ 1.0.
+*   **Criteria**: ROE ≥ 12% **and** Debt/Equity ≤ 1.0 **and** Promoter Holding < 72%.
 *   **Applied**: On Monday rebalance days only. Stocks with missing data pass (benefit of the doubt).
-*   **Purpose**: Prevents RSI and Bollinger Mean Reversion from buying "falling knives" — stocks that are cheap because fundamentals are deteriorating.
+*   **Purpose**: Prevents buying "falling knives" with deteriorating fundamentals, and limits governance/concentration risk (e.g., stopping 20% single-day drawdowns common in high-promoter-pledge shares).
 
 ---
 
