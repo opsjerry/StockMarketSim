@@ -4,11 +4,10 @@
         <!-- Settings survive reinstall/restore from Google account -->
         <include domain="sharedpref" path="."/>
         <!-- Exclude DB: emulator test data must not bleed onto real phones via Google Backup -->
-        <exclude domain="database" path="."/>
     </cloud-backup>
     <device-transfer>
         <!-- Keep everything for phone-to-phone transfers (user expects their data to move) -->
-        <include domain="database" path="."/>
+        <include domain="database" path="stock_market_sim.db"/>
         <include domain="sharedpref" path="."/>
     </device-transfer>
 </data-extraction-rules>

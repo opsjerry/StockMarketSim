@@ -3,5 +3,4 @@
     <!-- Settings (API keys, preferences) survive reinstall -->
     <include domain="sharedpref" path="."/>
     <!-- Exclude simulation DB: emulator test data must not bleed onto real devices -->
-    <exclude domain="database" path="."/>
 </full-backup-content>
