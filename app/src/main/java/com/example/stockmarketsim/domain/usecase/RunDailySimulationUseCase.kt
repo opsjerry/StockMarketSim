@@ -34,9 +34,14 @@ class RunDailySimulationUseCase @Inject constructor(
     private val zerodhaBrokerSource: com.example.stockmarketsim.data.remote.ZerodhaBrokerSource,
     private val qualityFilter: com.example.stockmarketsim.domain.analysis.QualityFilter
 ) {
-    suspend operator fun invoke(systemMessage: String? = null) {
+    suspend operator fun invoke(systemMessage: String? = null, targetSimulationId: Int? = null) {
         val simulations = simulationRepository.getSimulations().first()
-        val activeSimulations = simulations.filter { it.status == SimulationStatus.ACTIVE }
+        var activeSimulations = simulations.filter { it.status == SimulationStatus.ACTIVE }
+
+        if (targetSimulationId != null) {
+            activeSimulations = activeSimulations.filter { it.id == targetSimulationId }
+        }
+
         if (activeSimulations.isEmpty()) return
 
         val activeIds = activeSimulations.map { it.id }
@@ -169,6 +174,18 @@ class RunDailySimulationUseCase @Inject constructor(
                 )
                 var bestStrategyId = simTournamentResult.candidates.firstOrNull()?.strategyId ?: "SAFE_HAVEN"
 
+                val candidates = simTournamentResult.candidates
+                if (candidates.isNotEmpty()) {
+                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                    val splitDateStr = sdf.format(java.util.Date(simTournamentResult.evaluationStartDate))
+                    val endDateStr = sdf.format(java.util.Date(marketData.values.firstOrNull()?.lastOrNull()?.date ?: System.currentTimeMillis()))
+                    logManager.log(sim.id, "📅 Backtest Period: Tested on out-of-sample data from $splitDateStr to $endDateStr.")
+                    
+                    val top3 = candidates.take(3)
+                    val topListStr = top3.joinToString(" | ") { "${it.strategyName}: Alpha ${"%.2f".format(it.alpha)}%" }
+                    logManager.log(sim.id, "🏅 Top Candidates (Risk-Adjusted): $topListStr")
+                }
+
                 // QUANT VERDICT: Sticky ML Model (Anchor)
                 if (sim.strategyId == "MULTI_FACTOR_DNN" && bestStrategyId != "MULTI_FACTOR_DNN" && bestStrategyId != "SAFE_HAVEN") {
                     val currentMlResult = simTournamentResult.candidates.find { it.strategyId == "MULTI_FACTOR_DNN" }
@@ -179,10 +196,17 @@ class RunDailySimulationUseCase @Inject constructor(
 
                         if (topChallenger.alpha < marginRequired) {
                             logManager.log(sim.id, "🛡️ Quant Guard: Retaining ML Model. Challenger '${topChallenger.strategyId}' Alpha (${"%.2f".format(topChallenger.alpha)}%) didn't beat ML (${"%.2f".format(currentMlResult.alpha)}%) by required margin.")
+                            logManager.log(sim.id, "🎯 Selected 'Multi Factor DNN' due to sticky model rule, retaining consistency over minor alpha gains.")
                             bestStrategyId = "MULTI_FACTOR_DNN"
                         } else {
                             logManager.log(sim.id, "⚠️ Regime Shift: Challenger '${topChallenger.strategyId}' Alpha (${"%.2f".format(topChallenger.alpha)}%) significantly outperformed ML Model (${"%.2f".format(currentMlResult.alpha)}%). Switching strategy.")
+                            logManager.log(sim.id, "🎯 Selected '${topChallenger.strategyName}' based on significantly higher risk-adjusted score (fee-adjusted alpha & Sharpe) meeting target return.")
                         }
+                    }
+                } else {
+                    val topCandidate = simTournamentResult.candidates.firstOrNull()
+                    if (topCandidate != null && bestStrategyId != "SAFE_HAVEN") {
+                        logManager.log(sim.id, "🎯 Selected '${topCandidate.strategyName}' based on highest risk-adjusted score (fee-adjusted alpha & Sharpe) meeting target return.")
                     }
                 }
 

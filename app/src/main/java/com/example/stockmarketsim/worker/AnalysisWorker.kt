@@ -126,6 +126,16 @@ class AnalysisWorker @AssistedInject constructor(
             
             file.writeText(jsonBuilder.toString())
             
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            val splitDateStr = sdf.format(java.util.Date(tournamentResult.evaluationStartDate))
+            val endDateStr = sdf.format(java.util.Date(marketData.values.firstOrNull()?.lastOrNull()?.date ?: System.currentTimeMillis()))
+            logManager.log(simulationId, "📅 Backtest Period: Tested on out-of-sample data from $splitDateStr to $endDateStr.")
+            
+            val top3 = results.take(3)
+            val topListStr = top3.joinToString(" | ") { "${it.strategyName}: Alpha ${"%.2f".format(it.alpha)}%" }
+            logManager.log(simulationId, "🏅 Top Candidates (Risk-Adjusted): $topListStr")
+            logManager.log(simulationId, "🎯 Selected '${results.first().strategyName}' based on highest risk-adjusted score (fee-adjusted alpha & Sharpe) meeting target return.")
+            
             android.util.Log.d("AnalysisWorker", "Backtest Complete. Top Strategy: ${results.first().strategyName} (${results.first().returnPct}%)")
             logManager.log(simulationId, "✅ Backtest Complete. Top Strategy: ${results.first().strategyName}")
 

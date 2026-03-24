@@ -78,18 +78,39 @@ class StockRepositoryImpl @Inject constructor(
         limit: Int
     ): List<StockQuote> {
         val cached = dao.getHistory(symbol, 0) // fetch all
-        if (cached.isNotEmpty()) {
-            val sorted = cached.map { it.toDomain() }
-                .distinctBy { it.date }
-                .sortedBy { it.date }
-            return if (limit > 0) sorted.takeLast(limit) else sorted
+        val sortedCached = if (cached.isNotEmpty()) {
+            cached.map { it.toDomain() }.distinctBy { it.date }.sortedBy { it.date }
+        } else {
+            emptyList()
         }
 
-        // Fetch from Yahoo Finance (sole remote history source)
-        val remote = remoteSource.getHistory(symbol)
-        dao.insertPrices(remote.map { it.toEntity() })
-        val sorted = remote.distinctBy { it.date }.sortedBy { it.date }
-        return if (limit > 0) sorted.takeLast(limit) else sorted
+        if (sortedCached.isNotEmpty()) {
+            val lastDate = sortedCached.last().date
+            val now = System.currentTimeMillis()
+            // If data is less than 12 hours old, trust the cache.
+            if ((now - lastDate) <= 12 * 60 * 60 * 1000L) {
+                return if (limit > 0) sortedCached.takeLast(limit) else sortedCached
+            }
+        }
+
+        // Fetch fresh data if empty or stale (> 12h)
+        try {
+            val startDate = sortedCached.lastOrNull()?.let { it.date / 1000 }
+            val remote = remoteSource.getHistory(symbol, startDate)
+            if (remote.isNotEmpty()) {
+                dao.insertPrices(remote.map { it.toEntity() })
+            }
+        } catch (e: Exception) {
+            // Priority 3: On network error, gracefully fallback to the stale cache if available
+            if (sortedCached.isNotEmpty()) {
+                return if (limit > 0) sortedCached.takeLast(limit) else sortedCached
+            }
+            return emptyList()
+        }
+
+        val updatedCached = dao.getHistory(symbol, 0)
+        val finalSorted = updatedCached.map { it.toDomain() }.distinctBy { it.date }.sortedBy { it.date }
+        return if (limit > 0) finalSorted.takeLast(limit) else finalSorted
     }
 
 

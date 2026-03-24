@@ -70,7 +70,7 @@ class CreateSimulationViewModel @Inject constructor(
                 // and allows the UI to immediately pop back to the dashboard.
                 kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     try {
-                        runDailySimulationUseCase()
+                        runDailySimulationUseCase(targetSimulationId = simId.toInt())
                     } catch (e: Exception) {
                         android.util.Log.e("CreateSimulation", "Simulation execution failed", e)
                     }

@@ -104,7 +104,7 @@ class AnalysisViewModel @Inject constructor(
                 
                 // 3. Trigger Initial Buy (Simulate immediately)
                 try {
-                    runDailySimulationUseCase() 
+                    runDailySimulationUseCase(targetSimulationId = simulationId) 
                     onComplete()
                 } catch (e: Exception) {
                     _state.value = AnalysisState.Error("Failed to execute initial simulation: ${e.message}")

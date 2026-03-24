@@ -15,6 +15,8 @@ class SimulationLogManager @Inject constructor(
 ) {
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
+    private val lock = Any()
+
     fun log(simulationId: Int, message: String) {
         // EXPERT REVIEW FIX: Security Obfuscation
         // In a real app, we would use BuildConfig.DEBUG.
@@ -25,10 +27,12 @@ class SimulationLogManager @Inject constructor(
         val timestamp = dateFormat.format(Date())
         val logLine = "[$timestamp] $safeMessage\n"
         
-        try {
-            file.appendText(logLine)
-        } catch (e: Exception) {
-            e.printStackTrace()
+        synchronized(lock) {
+            try {
+                file.appendText(logLine)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -42,11 +46,14 @@ class SimulationLogManager @Inject constructor(
         val safeMessage = maskSensitiveInfo(message)
         val timestamp = dateFormat.format(Date())
         val logLine = "[$timestamp] $safeMessage\n"
-        for (id in simulationIds) {
-            try {
-                File(context.filesDir, "sim_logs_$id.txt").appendText(logLine)
-            } catch (e: Exception) {
-                e.printStackTrace()
+        
+        synchronized(lock) {
+            for (id in simulationIds) {
+                try {
+                    File(context.filesDir, "sim_logs_$id.txt").appendText(logLine)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
     }

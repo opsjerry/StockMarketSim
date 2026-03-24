@@ -407,3 +407,11 @@ The daily runner (`DailySimulationWorker`) remains the **guaranteed safety net**
 - 20% annualized threshold unchanged
 
 **Implementation**: `RegimeFilter.detectRegime()` slices `benchmarkHistory.takeLast(61)` (61 prices = 60 log-returns) before computing variance. The full 365-day fetch is retained to anchor SMA(200) and the Fast-Bear Tripwire.
+
+---
+
+## 13. Data Freshness & Caching Fixes (Added: 24 Mar 2026)
+
+### A. Benchmark History Staleness Fix - `StockRepositoryImpl.kt`
+**Problem**: The simulation used `getStockHistory` to fetch the Nifty benchmark. This method previously checked `if (cached.isNotEmpty())` and instantly returned database records forever, bypassing the 12-hour staleness checks implemented elsewhere. This caused identical mathematical tripwires (e.g. `9.6% drop in 20 days`) to repeat continuously across multiple simulation runs even after real-world active market sessions had concluded.
+**Fix**: Added a 12-hour expiration/staleness guard to `getStockHistory`. If the latest stored candle is older than 12 hours, the engine now incrementally fetches the missing dates from Yahoo Finance, ensures the local database is updated, and then proceeds.
