@@ -45,10 +45,19 @@ fun LogViewerScreen(
 ) {
     val events by viewModel.events.collectAsState()
     val rawLogs by viewModel.rawLogs.collectAsState()
+    val exportStatus by viewModel.exportStatus.collectAsState()
     val context = LocalContext.current
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var filter by remember { mutableStateOf(LogFilter.ALL) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show export error via Snackbar
+    LaunchedEffect(exportStatus) {
+        if (exportStatus != null && exportStatus!!.startsWith("Export failed")) {
+            snackbarHostState.showSnackbar(exportStatus!!)
+        }
+    }
 
     LaunchedEffect(simulationId) { viewModel.loadLogs(simulationId) }
 
@@ -64,6 +73,7 @@ fun LogViewerScreen(
 
     Scaffold(
         containerColor = Navy900,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -79,6 +89,21 @@ fun LogViewerScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Navy950),
                 actions = {
+                    // HTML Export button — opens share chooser (Chrome / browser)
+                    IconButton(
+                        onClick = { viewModel.exportHtmlReport(simulationId) },
+                        enabled = exportStatus == null
+                    ) {
+                        if (exportStatus != null && exportStatus!!.startsWith("Generating")) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = ElectricBlue,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(Icons.Default.Send, "Export HTML Report", tint = ElectricBlue)
+                        }
+                    }
                     IconButton(onClick = {
                         val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         cb.setPrimaryClip(ClipData.newPlainText("Logs", rawLogs))

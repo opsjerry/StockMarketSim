@@ -17,6 +17,7 @@ import kotlinx.coroutines.coroutineScope
 
 import com.example.stockmarketsim.domain.analysis.RiskEngine
 import com.example.stockmarketsim.domain.analysis.RegimeFilter
+import com.example.stockmarketsim.domain.analysis.RegimeDetail
 import com.example.stockmarketsim.domain.analysis.RegimeSignal
 import com.example.stockmarketsim.domain.model.StockUniverse
 import com.example.stockmarketsim.data.manager.AppNotificationManager
@@ -91,10 +92,31 @@ class RunDailySimulationUseCase @Inject constructor(
 
         // 2. Regime Filter Check (global — same market for all sims)
         val inflation = stockRepository.getInflationRate { msg -> logManager.logToAll(activeIds, msg) }
-        val regimeSignal = RegimeFilter.detectRegime(benchmarkHistory, inflation) { msg ->
+        val regimeDetail: RegimeDetail = RegimeFilter.detectRegimeDetail(benchmarkHistory, inflation) { msg ->
             logManager.logToAll(activeIds, msg)
         }
+        val regimeSignal = regimeDetail.signal
         val isBearMarket = regimeSignal == RegimeSignal.BEARISH
+
+        // KPI 1: Enhanced Macro Regime Dashboard
+        val trendIcon = if (regimeDetail.isUptrend) "📈" else "📉"
+        val trendLabel = if (regimeDetail.isUptrend) "UPTREND ✅" else "DOWNTREND ❌"
+        val volIcon  = if (regimeDetail.isHighVol) "❌" else "✅"
+        val cpiIcon  = if (regimeDetail.isHighInflation) "❌" else "✅"
+        val bearIcon = if (regimeDetail.fastBear20dPct < -7.0) "❌" else "✅"
+        val sma200Str = if (regimeDetail.sma200 > 0) "₹${"%,.0f".format(regimeDetail.sma200)}" else "N/A"
+        val distSign = if (regimeDetail.distPct >= 0) "+" else ""
+        val regimeLine = when (regimeSignal) {
+            RegimeSignal.BULLISH -> "BULLISH 🟢 (All filters pass)"
+            RegimeSignal.BEARISH -> "BEARISH 🔴 (Entering cash preservation)"
+            RegimeSignal.NEUTRAL -> "NEUTRAL 🟡 (Mixed signals — reduced allocation)"
+        }
+        logManager.logToAll(activeIds, """🔬 Macro Regime Dashboard
+   NIFTY : ₹${"%,.0f".format(regimeDetail.niftyPrice)} | SMA(200): $sma200Str | Dist: $distSign${"%.1f".format(regimeDetail.distPct)}% [$trendLabel]
+   HV60  : ${"%.1f".format(regimeDetail.hv60Pct)}% annualized | Threshold: 20.0% [$volIcon ${if (regimeDetail.isHighVol) "HIGH VOL" else "LOW VOL"}]
+   India CPI: ${inflation}% | RBI Band: 2–6% [$cpiIcon ${if (regimeDetail.isHighInflation) "ABOVE BAND" else "WITHIN BAND"}]
+   Fast-Bear 20D: ${"%.1f".format(regimeDetail.fastBear20dPct)}% (threshold -7%) [$bearIcon]
+   → Regime: $regimeLine""")
 
         if (isBearMarket) {
             logManager.logToAll(activeIds, "🐻 Bear Market Detected! Switching to safety mode (Targeting 0% equity exposure).")
@@ -121,8 +143,16 @@ class RunDailySimulationUseCase @Inject constructor(
                 logManager.logToAll(activeIds, msg)
             }
             val (passed, rejected) = qualityFilter.filterWithReasons(universe, fundamentals)
-            if (rejected.isNotEmpty()) {
-                logManager.logToAll(activeIds, "🧹 Filtered out ${rejected.size} low-quality stocks (Low ROE / High Debt).")
+            // KPI 3: Quality Filter Rejection Audit
+            if (rejected.isEmpty()) {
+                logManager.logToAll(activeIds, "🧹 Fundamental Quality Filter: All ${passed.size} stocks passed (ROE≥12%, D/E≤1.0, Promoter<72%).")
+            } else {
+                val preview = rejected.take(10).joinToString("\n      ")
+                val more = if (rejected.size > 10) "\n      ...and ${rejected.size - 10} more" else ""
+                logManager.logToAll(activeIds, """🧹 Fundamental Quality Filter (${universe.size} → ${passed.size} passed, ${rejected.size} rejected):
+   ✅ ${passed.size} stocks passed quality gate (ROE≥12%, D/E≤1.0, Promoter<72%)
+   ❌ Rejected:
+      $preview$more""")
             }
             qualityPassedUniverse = passed
         }
@@ -164,11 +194,12 @@ class RunDailySimulationUseCase @Inject constructor(
                 // Run the sim-specific tournament with the correct per-sim target return AND duration
                 logManager.log(sim.id, "🏎️ Auto-Pilot: Running Strategy Tournament (Backtesting 40+ Strategies)...")
                 val simDurationDays = sim.durationMonths * 30
+                val targetReturnFraction = sim.targetReturnPercentage / 100.0
                 val simTournamentResult = runStrategyTournamentUseCase(
                     marketData = marketData,
                     benchmarkData = benchmarkHistory,
                     initialCash = sim.currentAmount,
-                    targetReturn = sim.targetReturnPercentage / 100.0,
+                    targetReturn = targetReturnFraction,
                     simDurationDays = simDurationDays,
                     onProgress = { msg -> logManager.log(sim.id, msg) }
                 )
@@ -179,11 +210,38 @@ class RunDailySimulationUseCase @Inject constructor(
                     val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
                     val splitDateStr = sdf.format(java.util.Date(simTournamentResult.evaluationStartDate))
                     val endDateStr = sdf.format(java.util.Date(marketData.values.firstOrNull()?.lastOrNull()?.date ?: System.currentTimeMillis()))
-                    logManager.log(sim.id, "📅 Backtest Period: Tested on out-of-sample data from $splitDateStr to $endDateStr.")
-                    
-                    val top3 = candidates.take(3)
-                    val topListStr = top3.joinToString(" | ") { "${it.strategyName}: Alpha ${"%.2f".format(it.alpha)}%" }
-                    logManager.log(sim.id, "🏅 Top Candidates (Risk-Adjusted): $topListStr")
+
+                    // KPI 2: Full Tournament Scorecard
+                    val profileLabel = when {
+                        targetReturnFraction <= 0.15 -> "CONSERVATIVE (α×${simTournamentResult.alphaWeight} + σ×${simTournamentResult.sharpeWeight})"
+                        targetReturnFraction <= 0.30 -> "BALANCED (α×${simTournamentResult.alphaWeight} + σ×${simTournamentResult.sharpeWeight})"
+                        else -> "AGGRESSIVE (α×${simTournamentResult.alphaWeight} + σ×${simTournamentResult.sharpeWeight})"
+                    }
+                    val header = "%-22s %9s %7s %8s %7s %7s %9s %10s".format(
+                        "Strategy", "OOS α", "Sharpe", "WinRate", "MaxDD", "Trades", "FeeAdj α", "Score")
+                    val divider = "─".repeat(header.length)
+                    val rows = candidates.take(10).mapIndexed { idx, r ->
+                        val rankMark = if (idx == 0) " ⭐" else ""
+                        val name = r.strategyName.take(22)
+                        "%-22s %+8.1f%% %7.2f %7.0f%% %6.1f%% %7d %+8.1f%% %9.1f%s".format(
+                            name,
+                            r.alpha,
+                            r.sharpeRatio,
+                            r.winRate * 100,
+                            r.maxDrawdown,
+                            r.totalTrades,
+                            r.feeAdjustedAlpha,
+                            r.finalScore,
+                            rankMark
+                        )
+                    }.joinToString("\n   ")
+                    logManager.log(sim.id, """🏆 Tournament Scorecard (OOS: $splitDateStr → $endDateStr)
+   Risk Profile: $profileLabel | Target: ${sim.targetReturnPercentage.toInt()}%
+
+   $header
+   $divider
+   $rows
+   $divider""")
                 }
 
                 // QUANT VERDICT: Sticky ML Model (Anchor)
@@ -264,7 +322,43 @@ class RunDailySimulationUseCase @Inject constructor(
                 if (allocs.isEmpty()) {
                     logManager.log(sim.id, "⚠️ Strategy returned 0 allocations. (Check Strategy Logic)")
                 } else {
-                    logManager.log(sim.id, "✅ Strategy selected ${allocs.size} stocks. Top: ${allocs.keys.take(3)}")
+                    // KPI 4: Stock Selection Scorecard — sector heat + per-stock signal/ATR%/₹
+                    val totalPortfolioValForLog = portfolio.sumOf {
+                        (stockRepository.getStockQuote(it.symbol)?.close ?: it.averagePrice) * it.quantity
+                    } + sim.currentAmount
+                    val sectorBuckets = allocs.entries.groupBy {
+                        com.example.stockmarketsim.domain.model.StockUniverse.sectorMap[it.key] ?: "OTHER"
+                    }
+                    val sectorSummary = sectorBuckets.entries.sortedByDescending { e -> e.value.sumOf { it.value } }
+                        .joinToString(" | ") { (sector, entries) ->
+                            val sectorW = entries.sumOf { it.value } * 100
+                            val cap = if (sectorW > 28) " ⚠️NEAR CAP" else ""
+                            "$sector: ${"%.1f".format(sectorW)}% (${entries.size})$cap"
+                        }
+                    val pickHeader = "%-16s %8s %10s %6s %10s".format("Symbol", "Weight", "ATR%", "Price", "Alloc ₹")
+                    val pickDivider = "─".repeat(pickHeader.length)
+                    val pickRows = allocs.entries.sortedByDescending { it.value }.take(15)
+                        .joinToString("\n   ") { (sym, w) ->
+                            val hist = marketData[sym] ?: emptyList()
+                            val lastClose = hist.lastOrNull()?.close ?: 0.0
+                            val atr = RiskEngine.calculateATR(hist, 14)
+                            val atrPct = if (lastClose > 0 && atr > 0) atr / lastClose * 100 else 0.0
+                            val allocRs = w * totalPortfolioValForLog
+                            "%-16s %7.1f%% %9.2f%% %6s %9s".format(
+                                sym.take(16),
+                                w * 100,
+                                atrPct,
+                                "₹${"%,.0f".format(lastClose)}",
+                                "₹${"%,.0f".format(allocRs)}"
+                            )
+                        }
+                    logManager.log(sim.id, """📊 Stock Selection Scorecard (${allocs.size} stocks via $strategyId)
+   Sector Allocation: $sectorSummary
+
+   $pickHeader
+   $pickDivider
+   $pickRows
+   $pickDivider""")
                 }
                 allocs
             } else {
@@ -314,13 +408,28 @@ class RunDailySimulationUseCase @Inject constructor(
 
                 // Phase 2: Use wider stop for fresh positions (honeymoon)
                 val daysSincePurchase = now - item.purchaseDate
-                val stopMultiplier = if (daysSincePurchase < THREE_TRADING_DAYS_MS) 3.5 else 2.0
-                val stopPrice = RiskEngine.calculateATRStopPrice(peakPrice, atr, stopMultiplier, isVolatile)
+                val isHoneymoon = daysSincePurchase < THREE_TRADING_DAYS_MS
+                val stopMultiplier = if (isHoneymoon) 3.5 else 2.0
+                val effectiveMultiplier = if (isVolatile && !isHoneymoon) 1.5 else stopMultiplier
+                val atrStopRaw = peakPrice - (atr * effectiveMultiplier)
+                val hardFloor   = peakPrice * 0.93
+                val stopPrice = maxOf(atrStopRaw, hardFloor)
+                val stopPath = if (stopPrice == hardFloor && hardFloor > atrStopRaw) "Hard Floor (7%)*" else "${effectiveMultiplier}×ATR"
 
                 if (currentPrice < stopPrice) {
-                    val honeymoonTag = if (daysSincePurchase < THREE_TRADING_DAYS_MS) " [Honeymoon-widened stop]" else ""
+                    // KPI 5: Full ATR Stop-Loss Breakdown
+                    val ddFromPeak  = if (peakPrice > 0) (peakPrice - currentPrice) / peakPrice * 100 else 0.0
+                    val ddFromEntry = if (item.averagePrice > 0) (item.averagePrice - currentPrice) / item.averagePrice * 100 else 0.0
+                    val atrPct = if (currentPrice > 0) atr / currentPrice * 100 else 0.0
+                    val volatileTag = if (isVolatile) " [VOLATILE — 1.5× tightened]" else ""
+                    val honeymoonTag = if (isHoneymoon) " [Honeymoon — 3.5× widened]" else ""
                     symbolsToCut.add(sym)
-                    logManager.log(sim.id, "🛑 Stop-Loss Hit: Selling $sym @ ₹${"%,.2f".format(currentPrice)} (stop ₹${"%,.2f".format(stopPrice)}, ${stopMultiplier}×ATR$honeymoonTag)")
+                    logManager.log(sim.id, """🛑 Stop-Loss Hit: $sym$honeymoonTag$volatileTag
+   Entry: ₹${"%,.2f".format(item.averagePrice)} | Peak: ₹${"%,.2f".format(peakPrice)} | Current: ₹${"%,.2f".format(currentPrice)}
+   Drawdown from Peak: -${"%.1f".format(ddFromPeak)}% | from Entry: -${"%.1f".format(ddFromEntry)}%
+   ATR(14): ₹${"%,.2f".format(atr)} (${"%.1f".format(atrPct)}% of price) | Mode: ${if (isVolatile) "VOLATILE" else "NORMAL"}
+   Stop calc: ₹${"%,.2f".format(peakPrice)} − (₹${"%,.2f".format(atr)} × $effectiveMultiplier) = ₹${"%,.2f".format(atrStopRaw)} | Hard Floor: ₹${"%,.2f".format(hardFloor)}
+   Applied Stop: ₹${"%,.2f".format(stopPrice)} via $stopPath ← breached""")
                 }
             }
             if (symbolsToCut.isNotEmpty()) {
@@ -348,11 +457,49 @@ class RunDailySimulationUseCase @Inject constructor(
                         date = System.currentTimeMillis(),
                         reason = "Daily Strategy Execution ($strategyId)", brokerOrderId = null
                     ))
-                    logManager.log(sim.id, "🔴 SELL $sym @ ₹${"%.2f".format(sellPrice)} | Qty: ${"%.0f".format(item.quantity)} | Value: ₹${"%.0f".format(gross)} (Daily Strategy Execution ($strategyId))")
+                    logManager.log(sim.id, "🔴 SELL $sym @ ₹${"%.2f".format(sellPrice)} | Qty: ${"%.0f".format(item.quantity)} | Value: ₹${"%.0f".format(gross)} (Stop-Loss)")
                 }
-                val holdEquity = newPortfolioMap.values.sumOf { item ->
-                    val p = stockRepository.getStockQuote(item.symbol)?.close ?: item.averagePrice
-                    item.quantity * p
+
+                // KPI 6: Mid-Week Portfolio Health Report (full position P&L table)
+                val mappedItems = newPortfolioMap.values.map { item ->
+                    item to (stockRepository.getStockQuote(item.symbol)?.close ?: item.averagePrice)
+                }
+                val holdEquity = mappedItems.sumOf { it.first.quantity * it.second }
+                if (mappedItems.isNotEmpty()) {
+                    val colHeader = "%-14s %6s %10s %10s %9s %6s %10s".format(
+                        "Symbol", "Qty", "Entry", "Current", "PnL ₹", "PnL%", "Stop")
+                    val divider = "─".repeat(colHeader.length)
+                    val posRows = mappedItems.sortedByDescending { (item, curP) -> item.quantity * curP }
+                        .joinToString("\n   ") { (item, curP) ->
+                            val pnl  = (curP - item.averagePrice) * item.quantity
+                            val pnlPct = if (item.averagePrice > 0) (curP - item.averagePrice) / item.averagePrice * 100 else 0.0
+                            val pnlSign = if (pnl >= 0) "+" else ""
+                            val hist = marketData[item.symbol] ?: emptyList()
+                            val atr  = RiskEngine.calculateATR(hist, 14)
+                            val isVol = RiskEngine.isVolatile(hist)
+                            val mult = if ((now - item.purchaseDate) < THREE_TRADING_DAYS_MS) 3.5 else (if (isVol) 1.5 else 2.0)
+                            val stop = maxOf(item.highestPrice - atr * mult, item.highestPrice * 0.93)
+                            val statusEmoji = if (pnlPct >= 0) "✅" else "⚠️"
+                            "%-14s %6.0f %9s %9s %8s %5s%% %9s %s".format(
+                                item.symbol.take(14),
+                                item.quantity,
+                                "₹${"%,.0f".format(item.averagePrice)}",
+                                "₹${"%,.0f".format(curP)}",
+                                "$pnlSign₹${"%,.0f".format(pnl)}",
+                                "$pnlSign${"%.1f".format(pnlPct)}",
+                                "₹${"%,.0f".format(stop)}",
+                                statusEmoji
+                            )
+                        }
+                    val holdTotal2 = holdCash + holdEquity
+                    val cashPct = if (holdTotal2 > 0) holdCash / holdTotal2 * 100 else 0.0
+                    val eqPct   = if (holdTotal2 > 0) holdEquity / holdTotal2 * 100 else 0.0
+                    logManager.log(sim.id, """📈 Mid-Week Portfolio Health (${newPortfolioMap.size} positions, stops triggered: ${symbolsToCut.size})
+   $colHeader
+   $divider
+   $posRows
+   $divider
+   Cash: ₹${"%,.0f".format(holdCash)} (${"%.1f".format(cashPct)}%) | Equity: ₹${"%,.0f".format(holdEquity)} (${"%.1f".format(eqPct)}%) | Total: ₹${"%,.0f".format(holdTotal2)}""")
                 }
                 val holdTotal = holdCash + holdEquity
                 simulationRepository.updatePortfolio(sim.id, newPortfolioMap.values.toList())
@@ -426,6 +573,27 @@ class RunDailySimulationUseCase @Inject constructor(
 
             simulationRepository.insertHistory(sim.id, System.currentTimeMillis(), totalEquity)
 
+            // KPI 7: Cycle Attribution Summary
+            val buyTrades    = transactions.filter { it.type == "BUY" }
+            val sellTrades   = transactions.filter { it.type == "SELL" }
+            val grossValue   = transactions.sumOf { it.amount }
+            val totalComm    = grossValue * 0.001
+            val slippageDrag = grossValue * 0.002  // 0.2% per side, conservative estimate
+            val cashPctFinal = if (totalEquity > 0) updatedCash / totalEquity * 100 else 0.0
+            val equityPctFinal = 100.0 - cashPctFinal
+            // Benchmark cycle alpha: compare last vs first benchmark close in marketData window
+            val benchStart = benchmarkHistory.getOrNull(benchmarkHistory.size - 6)?.close ?: 0.0
+            val benchEnd   = benchmarkHistory.lastOrNull()?.close ?: 0.0
+            val benchCycleReturn = if (benchStart > 0) (benchEnd - benchStart) / benchStart * 100 else 0.0
+            val prevEquityForAlpha = currentSim.totalEquity.takeIf { it > 0 } ?: totalEquity
+            val cyclePortfolioReturn = if (prevEquityForAlpha > 0) (totalEquity - prevEquityForAlpha) / prevEquityForAlpha * 100 else 0.0
+            val cycleAlpha = cyclePortfolioReturn - benchCycleReturn
+            val alphaSign = if (cycleAlpha >= 0) "+" else ""
+            logManager.log(sim.id, """💼 Rebalance Cycle Summary
+   Trades: ${buyTrades.size} BUY, ${sellTrades.size} SELL | Gross: ₹${"%,.0f".format(grossValue)}
+   Commission: ₹${"%,.0f".format(totalComm)} | Slippage est: ₹${"%,.0f".format(slippageDrag)}
+   Cash: ₹${"%,.0f".format(updatedCash)} (${"%.1f".format(cashPctFinal)}%) | Equity: ₹${"%,.0f".format(finalPortfolioValue)} (${"%.1f".format(equityPctFinal)}%)
+   Cycle return: ${"%.2f".format(cyclePortfolioReturn)}% | NIFTY: ${"%.2f".format(benchCycleReturn)}% | Alpha: $alphaSign${"%.2f".format(cycleAlpha)}%""")
             logManager.log(sim.id, "🏁 Cycle Complete. Portfolio Value: ₹${"%,.2f".format(totalEquity)}")
 
             if (transactions.isNotEmpty()) { // Changed from currentSim.isLiveTradingEnabled to transactions.isNotEmpty()

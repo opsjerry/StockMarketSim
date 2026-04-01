@@ -2,6 +2,10 @@ package com.example.stockmarketsim.presentation.ui.logs
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.app.Application
+import android.content.Intent
+import android.net.Uri
+import androidx.core.content.FileProvider
 import com.example.stockmarketsim.data.manager.SimulationLogManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +18,8 @@ import kotlinx.coroutines.withContext
 
 @HiltViewModel
 class LogViewerViewModel @Inject constructor(
-    private val logManager: SimulationLogManager
+    private val logManager: SimulationLogManager,
+    private val application: Application
 ) : ViewModel() {
 
     private val _events = MutableStateFlow<List<IntelligenceEvent>>(emptyList())
@@ -23,6 +28,9 @@ class LogViewerViewModel @Inject constructor(
     private val _rawLogs = MutableStateFlow("")
     val rawLogs = _rawLogs.asStateFlow()
 
+    private val _exportStatus = MutableStateFlow<String?>(null)
+    val exportStatus = _exportStatus.asStateFlow()
+
     fun loadLogs(simulationId: Int) {
         viewModelScope.launch {
             val content = withContext(Dispatchers.IO) {
@@ -30,6 +38,34 @@ class LogViewerViewModel @Inject constructor(
             }
             _rawLogs.value = content
             _events.value = parseLogs(content)
+        }
+    }
+
+    fun exportHtmlReport(simulationId: Int, simName: String = "Simulation #$simulationId") {
+        viewModelScope.launch {
+            _exportStatus.value = "Generating report…"
+            try {
+                val htmlFile = withContext(Dispatchers.IO) {
+                    logManager.generateHtmlReport(simulationId, simName)
+                }
+                // Share the file via a FileProvider so Chrome/any browser can open it
+                val uri: Uri = FileProvider.getUriForFile(
+                    application,
+                    "${application.packageName}.fileprovider",
+                    htmlFile
+                )
+                val shareIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "text/html")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                application.startActivity(Intent.createChooser(shareIntent, "Open Intelligence Report").apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                })
+                _exportStatus.value = null
+            } catch (e: Exception) {
+                _exportStatus.value = "Export failed: ${e.message}"
+            }
         }
     }
 

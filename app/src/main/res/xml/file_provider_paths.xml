@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider paths for sharing HTML intelligence reports via browser share intent.
+     Exposes app cacheDir only — no access to external storage or internal files. -->
+<paths>
+    <cache-path name="sim_reports" path="." />
+</paths>

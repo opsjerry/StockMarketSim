@@ -14,7 +14,9 @@ import javax.inject.Inject
 
 data class TournamentResult(
     val candidates: List<BacktestResult>,
-    val evaluationStartDate: Long
+    val evaluationStartDate: Long,
+    val alphaWeight: Double = 0.8,   // Weight used for alpha in final scoring
+    val sharpeWeight: Double = 0.2   // Weight used for Sharpe in final scoring
 )
 
 class RunStrategyTournamentUseCase @Inject constructor(
@@ -185,8 +187,17 @@ class RunStrategyTournamentUseCase @Inject constructor(
             val periodFitPenalty = if (period > 0 && period >= periodFitThreshold) -30.0 else 0.0
 
             (feeAdjustedAlpha * alphaWeight) + (clampedSharpe * sharpeWeight) + hitTargetBonus + periodFitPenalty
+        }.map { result ->
+            // Stamp computed scoring fields onto each result for log display
+            val feeAdj = result.alpha - (result.totalTrades * COST_PER_TRADE_PCT)
+            val clampedSharpe = (if (result.sharpeRatio > 3.0) 3.0 else result.sharpeRatio) * 10.0
+            val hitTargetBonus = if (result.returnPct >= targetReturn) 20.0 else 0.0
+            val period = periodByStrategyId[result.strategyId] ?: 0
+            val periodFitPenalty = if (period > 0 && period >= periodFitThreshold) -30.0 else 0.0
+            val score = (feeAdj * alphaWeight) + (clampedSharpe * sharpeWeight) + hitTargetBonus + periodFitPenalty
+            result.copy(feeAdjustedAlpha = feeAdj, finalScore = score)
         }
 
-        return TournamentResult(rankedResults, splitDate)
+        return TournamentResult(rankedResults, splitDate, alphaWeight, sharpeWeight)
     }
 }

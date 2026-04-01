@@ -18,7 +18,9 @@ data class BacktestResult(
     val alpha: Double,
     val maxDrawdown: Double = 0.0,
     val sharpeRatio: Double = 0.0,
-    val totalTrades: Int = 0  // For fee-adjusted tournament scoring
+    val totalTrades: Int = 0,       // For fee-adjusted tournament scoring
+    val feeAdjustedAlpha: Double = 0.0, // Alpha after deducting trade friction (0.4% per trade)
+    val finalScore: Double = 0.0        // Composite tournament score (alpha×weight + sharpe×weight + bonuses)
 )
 
 class Backtester @Inject constructor() {
