@@ -84,6 +84,21 @@ Capital preservation is the mathematically optimal path to long-term growth.
 *   **Applied**: On Monday rebalance days only. Stocks with missing data pass (benefit of the doubt).
 *   **Purpose**: Prevents buying "falling knives" with deteriorating fundamentals, and limits governance/concentration risk (e.g., stopping 20% single-day drawdowns common in high-promoter-pledge shares).
 
+### H. Volatility-Adjusted Cash Scaling (Added: Apr 2026)
+*   **Problem (Cash Drag)**: When a strategy generates fewer signals than its maximum capacity (e.g., 6 signals × 10% base = 60% deployed), 30-40% of capital sits idle at 0% return. During a 3.5% Nifty rally, a 30% cash drag causes the portfolio to return only ~2.45% — systematically underperforming beta.
+*   **Solution**: The Water-Filling Algorithm now scales up total deployment toward 100% (capped at `N signals × 20%`), but uses per-stock **Dynamic Volatility Caps** to govern how much each stock absorbs:
+
+| Stock Type | ATR% | Dynamic Cap | Behaviour |
+|:---|:---|:---|:---|
+| 🏔️ **Steady Giant** | < 2.5% | **20%** | Low-vol anchors absorb the released cash first |
+| 📊 **Standard** | 2.5% – 4.5% | **15%** | Moderate scaling allowed |
+| 🔥 **Wildcard** | > 4.5% | **10%** | Hard-capped — no scale-up regardless of liquidity |
+
+*   **Safety Net**: Total exposure is capped at `min(maxTotalExposure, N_signals × 20%)`. With 3 signals, the mathematical ceiling is 60%. No single stock ever receives more than 20%.
+*   **Bear Market**: Scaling is **fully disabled** in Bear Market mode. All caps revert to the conservative 5% base.
+*   **Simulation Log**: Every stock scaled above its 10% base emits an entry: `⚖️ Volatility Scaling (Cash Drag Mitigated): HDFCBANK [Steady Giant] scaled to 18.4%`
+*   **Mathematical Basis**: Capital is directed toward stocks with the lowest ATR% (highest `1/ATR%` gravity). This is the Minimum Variance Portfolio principle — fully deployed capital but with no increase in overall portfolio risk.
+
 ---
 
 ## 📊 3. Quantitative Integrity
@@ -415,3 +430,14 @@ The daily runner (`DailySimulationWorker`) remains the **guaranteed safety net**
 ### A. Benchmark History Staleness Fix - `StockRepositoryImpl.kt`
 **Problem**: The simulation used `getStockHistory` to fetch the Nifty benchmark. This method previously checked `if (cached.isNotEmpty())` and instantly returned database records forever, bypassing the 12-hour staleness checks implemented elsewhere. This caused identical mathematical tripwires (e.g. `9.6% drop in 20 days`) to repeat continuously across multiple simulation runs even after real-world active market sessions had concluded.
 **Fix**: Added a 12-hour expiration/staleness guard to `getStockHistory`. If the latest stored candle is older than 12 hours, the engine now incrementally fetches the missing dates from Yahoo Finance, ensures the local database is updated, and then proceeds.
+
+---
+
+## ⏳ 14. Temporal Consistency Fixes (Added: 2 Apr 2026)
+
+### A. Day-Of-Week Bias and State Persistence - `RelativeVolumeStrategy.kt`
+**Problem**: The original `RelativeVolumeStrategy` acted as a perfectly instantaneous Trigger logic — it only generated portfolio weights if a symbol had `volume > (avgVolume * 5.0)` **exactly today**. Because of the strict Monday portfolio rebalancing requirement (`§2F`), massive mid-week breakouts were structurally ignored in Live trading. Furthermore, in Walk-Forward Tournament backtesting, the engine inadvertently operated this as a 1-day hold (Day Trading algorithm), breaking the 3.5× ATR Honeymoon protection logic altogether.
+**Fix**: Converted point-in-time instantaneous volume trigger into a Persistent State Cross Section Ranker.
+*   **5-Day Lookback Window**: The algorithm now searches for the peak `relVol` over the last 5 trading days, natively retaining strong institutional-level breakouts in working memory long enough to sync successfully into Monday’s rebalancer cycle.
+*   **Decay Factor**: Breakouts decay via a Time-Decay curve (`decayedScore = relVol * Math.pow(0.8, daysAgo)`). A fresh 5.0x breakout is favoured heavily over a 4-day-old 5.0x breakout.
+*   **Uptrend Validation**: Ensuring `current.close > todaySma` is preserved on the literal evaluation day protects from purchasing mid-week breakups that collapsed late week prior.

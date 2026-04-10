@@ -244,4 +244,103 @@ class RiskEngineRegressionTest {
         val allocations = RiskEngine.applyRiskManagement(emptyList(), 100000.0, false)
         assertTrue("Empty signals should return empty allocations", allocations.isEmpty())
     }
+
+    // =====================================================================
+    // Volatility-Adjusted Cash Scaling (Dynamic Scale) — New Tests
+    // =====================================================================
+
+    /**
+     * Steady Giant (ATR% < 2.5%) must be allowed to scale up to 20%.
+     * Wildcard (ATR% > 4.5%) must be hard-capped at 10%.
+     * With only 2 stocks and a water-filling target of min(1.0, 2*0.20)=0.40,
+     * the Giant absorbs the bulk of capital while the Wildcard stays near base.
+     */
+    @Test
+    fun `Volatility Scaling - Steady Giant gets higher allocation than Wildcard`() {
+        val baseDate = 1704067200000L
+
+        // Steady Giant: very tight 1% daily moves (ATR% << 2.5%)
+        val giantHistory = (0..20).map { i ->
+            val close = 500.0 + i * 0.5   // 0.1% daily moves
+            StockQuote("GIANT.NS", baseDate + i * 86400000L, close, close + 1.0, close - 1.0, close, 1_000_000)
+        }
+
+        // Wildcard: wild 6% daily moves (ATR% >> 4.5%)
+        val wildcardHistory = (0..20).map { i ->
+            val close = 100.0 + (if (i % 2 == 0) i * 3.0 else -i * 3.0)
+            StockQuote("WILD.NS", baseDate + i * 86400000L, close, close + 6.0, close - 6.0, close, 500_000)
+        }
+
+        val signals = listOf(
+            StrategySignal("GIANT.NS", "BUY", 1.0),
+            StrategySignal("WILD.NS",  "BUY", 1.0)
+        )
+
+        val marketData = mapOf("GIANT.NS" to giantHistory, "WILD.NS" to wildcardHistory)
+        val allocations = RiskEngine.applyRiskManagement(signals, 100000.0, false, marketData)
+
+        val giantAlloc  = allocations["GIANT.NS"] ?: 0.0
+        val wildcardAlloc = allocations["WILD.NS"] ?: 0.0
+
+        assertTrue("Steady Giant allocation should be > Wildcard", giantAlloc > wildcardAlloc)
+        assertTrue("Steady Giant should scale above base 10%", giantAlloc > 0.10)
+        assertTrue("Wildcard should be capped at or near 10%", wildcardAlloc <= 0.11)
+        assertTrue("Steady Giant should not exceed 20% cap", giantAlloc <= 0.201)
+    }
+
+    /**
+     * Safety net: with only N signals, total exposure must never exceed N * 20%.
+     * Specifically with 3 signals, max exposure = 60% even in a bull bull market.
+     */
+    @Test
+    fun `Volatility Scaling - 3 signals do not exceed 60 percent total exposure`() {
+        val baseDate = 1704067200000L
+
+        // 3 Steady Giant stocks (all low volatility to maximize potential scaling)
+        val makeGiant = { sym: String ->
+            sym to (0..20).map { i ->
+                val close = 400.0 + i * 0.4
+                StockQuote(sym, baseDate + i * 86400000L, close, close + 1.0, close - 1.0, close, 2_000_000)
+            }
+        }
+
+        val marketData = mapOf(makeGiant("A.NS"), makeGiant("B.NS"), makeGiant("C.NS"))
+        val signals = listOf(
+            StrategySignal("A.NS", "BUY", 1.0),
+            StrategySignal("B.NS", "BUY", 1.0),
+            StrategySignal("C.NS", "BUY", 1.0)
+        )
+
+        val allocations = RiskEngine.applyRiskManagement(signals, 100000.0, false, marketData)
+        val totalExposure = allocations.values.sum()
+
+        // 3 signals × 20% cap = 60% maximum
+        assertTrue("Total exposure with 3 signals should not exceed 60%", totalExposure <= 0.61)
+        // Should deploy more than the default 30% (3 × 10%) thanks to scaling
+        assertTrue("Total exposure should scale above baseline 30%", totalExposure > 0.30)
+    }
+
+    /**
+     * In Bear Market, dynamic scaling must be fully disabled.
+     * All allocations must stay at the conservative 5% base cap regardless
+     * of how low a stock's ATR% is.
+     */
+    @Test
+    fun `Volatility Scaling - disabled in Bear Market even for Steady Giants`() {
+        val baseDate = 1704067200000L
+
+        // Very steady stock — in bull market this would scale to 20%
+        val steadyHistory = (0..20).map { i ->
+            val close = 500.0 + i * 0.1
+            StockQuote("STABLE.NS", baseDate + i * 86400000L, close, close + 0.5, close - 0.5, close, 5_000_000)
+        }
+
+        val signals = listOf(StrategySignal("STABLE.NS", "BUY", 1.0))
+        val marketData = mapOf("STABLE.NS" to steadyHistory)
+
+        val bearAlloc = RiskEngine.applyRiskManagement(signals, 100000.0, true, marketData)
+        val weight = bearAlloc["STABLE.NS"] ?: 0.0
+
+        assertTrue("Bear Market: Steady Giant must not scale above 5% base cap", weight <= 0.051)
+    }
 }

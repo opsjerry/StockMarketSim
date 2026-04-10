@@ -90,7 +90,8 @@ object RiskEngine {
         signals: List<StrategySignal>,
         totalEquity: Double,
         isBearMarket: Boolean,
-        marketData: Map<String, List<com.example.stockmarketsim.domain.model.StockQuote>> = emptyMap()
+        marketData: Map<String, List<com.example.stockmarketsim.domain.model.StockQuote>> = emptyMap(),
+        onScalingAction: ((String) -> Unit)? = null
     ): Map<String, Double> {
         val allocations = mutableMapOf<String, Double>()
 
@@ -101,25 +102,27 @@ object RiskEngine {
 
         // Position Sizing Logic
         // In Bear Market, reduce exposure
-        val maxAllocationPerStock = if (isBearMarket) 0.05 else 0.10 // 5% vs 10%
+        val baseAllocationPerStock = if (isBearMarket) 0.05 else 0.10 // 5% vs 10%
         val maxTotalExposure      = if (isBearMarket) 0.50 else 1.0  // 50% cash in Bear
 
         // Step 1: Compute raw signal-weighted allocations (unchanged behaviour)
         val rawAllocations = mutableMapOf<String, Double>()
         var currentExposure = 0.0
         for (signal in buySignals) {
-            if (currentExposure + maxAllocationPerStock > maxTotalExposure) break
-            val weight = (signal.confidence.coerceIn(0.5, 1.5)) * maxAllocationPerStock
+            if (currentExposure + baseAllocationPerStock > maxTotalExposure) break
+            val weight = (signal.confidence.coerceIn(0.5, 1.5)) * baseAllocationPerStock
             rawAllocations[signal.symbol] = weight
             currentExposure += weight
         }
 
-        // Step 2: Phase 3 — Inverse-volatility reweighting
+        // Step 2: Phase 3 — Volatility-Adjusted Cash Scaling (Dynamic Scale)
         // For each symbol, compute ATR% = ATR(14) / lastClose.
-        // Allocations are scaled by (1 / ATR%), then renormalized.
+        // Allocations are scaled by (1 / ATR%), then renormalized up to maxTotalExposure.
         // Skipped when marketData is empty (backtester, unit tests).
         if (marketData.isNotEmpty()) {
             val invVolWeights = mutableMapOf<String, Double>()
+            val dynamicCaps = mutableMapOf<String, Double>()
+
             for ((sym, rawWeight) in rawAllocations) {
                 val history = marketData[sym]
                 val lastClose = history?.lastOrNull()?.close ?: 0.0
@@ -127,14 +130,31 @@ object RiskEngine {
                 val atrPct = if (lastClose > 0 && atr > 0) atr / lastClose else 0.05  // fallback 5%
                 // Inverse ATR%: lower-volatility stocks get higher weight
                 invVolWeights[sym] = rawWeight / atrPct
+
+                // Calculate Dynamic Volatility Cap
+                val dynamicCap = if (isBearMarket) {
+                    0.05 // Fixed cap in bear market
+                } else if (atrPct < 0.025) {
+                    0.20 // Steady Giant
+                } else if (atrPct < 0.045) {
+                    0.15 // Standard
+                } else {
+                    0.10 // Wildcard
+                }
+                dynamicCaps[sym] = dynamicCap
             }
 
-            // Renormalize to preserve total raw exposure
-            val totalRaw    = rawAllocations.values.sum()
+            // Renormalize to scale up exposure
             val totalInvVol = invVolWeights.values.sum()
 
             if (totalInvVol > 0) {
-                var remainingTarget = totalRaw
+                // Volatility-Adjusted Target: Attempt full deployment but safely capped to avoid 1-stock 100%
+                var remainingTarget = if (isBearMarket) {
+                    rawAllocations.values.sum() // No scaling in bear
+                } else {
+                    kotlin.math.min(maxTotalExposure, buySignals.size * 0.20)
+                }
+
                 var currentInvTotal = totalInvVol
                 val finalAllocations = mutableMapOf<String, Double>()
                 val cappedSymbols = mutableSetOf<String>()
@@ -149,10 +169,12 @@ object RiskEngine {
                         if (sym in cappedSymbols) continue
 
                         val proposedWeight = invW * weightPerUnit
-                        if (proposedWeight >= maxAllocationPerStock) {
-                            finalAllocations[sym] = maxAllocationPerStock
+                        val cap = dynamicCaps[sym] ?: 0.10
+
+                        if (proposedWeight >= cap) {
+                            finalAllocations[sym] = cap
                             cappedSymbols.add(sym)
-                            remainingTarget -= maxAllocationPerStock
+                            remainingTarget -= cap
                             currentInvTotal -= invW
                             redistributed = true
                         }
@@ -168,6 +190,21 @@ object RiskEngine {
                     }
                 }
                 allocations.putAll(finalAllocations)
+
+                // Visibility: Log Scaling Events
+                if (onScalingAction != null && !isBearMarket) {
+                    for ((sym, finalW) in allocations) {
+                        val rawW = rawAllocations[sym] ?: 0.0
+                        if (finalW > rawW + 0.01) { // Scaled by at least 1%
+                            val cap = dynamicCaps[sym] ?: 0.10
+                            val type = if (cap >= 0.20) "Steady Giant" else if (cap >= 0.15) "Standard" else "Wildcard"
+                            val isCapped = finalW >= cap - 0.001
+                            val capNotice = if (isCapped) " (Max Cap)" else ""
+                            onScalingAction.invoke("⚖️ Volatility Scaling (Cash Drag Mitigated): $sym [$type] scaled from ${"%.1f".format(rawW * 100)}% -> ${"%.1f".format(finalW * 100)}%$capNotice")
+                        }
+                    }
+                }
+
             } else {
                 allocations.putAll(rawAllocations)
             }

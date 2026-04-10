@@ -23,23 +23,45 @@ class RelativeVolumeStrategy(
             
             if (currentIdx < smaPeriod) return@forEach
             
+            // Calculate current SMA to ensure we only buy/hold in an uptrend
+            var todayPriceSum = 0.0
+            for (i in (currentIdx - smaPeriod + 1)..currentIdx) {
+                todayPriceSum += history[i].close
+            }
+            val todaySma = todayPriceSum / smaPeriod
             val current = history[currentIdx]
             
-            // Calculate AvgVolume and SMA over last 'smaPeriod'
-            var volSum = 0.0
-            var priceSum = 0.0
-            val startIdx = currentIdx - smaPeriod + 1
-            for (i in startIdx..currentIdx) {
-                volSum += history[i].volume
-                priceSum += history[i].close
-            }
-            val avgVolume = volSum / smaPeriod
-            val sma = priceSum / smaPeriod
-            
-            // Score: Relative Volume Multiplier (Strength of breakout)
-            if (current.volume > (avgVolume * volumeMultiplier) && current.close > sma) {
-                val relVol = if (avgVolume > 0) current.volume.toDouble() / avgVolume else 0.0
-                scored.add(symbol to relVol)
+            if (current.close > todaySma) {
+                // Look for the strongest volume spike within the last 5 days
+                val lookbackDays = 5
+                var maxDecayedRelVol = 0.0
+                
+                val startWindow = maxOf(smaPeriod, currentIdx - lookbackDays + 1)
+                for (i in startWindow..currentIdx) {
+                    var volSum = 0.0
+                    // Calculate avg volume BEFORE the day 'i'
+                    for (j in (i - smaPeriod)..(i - 1)) {
+                        volSum += history[j].volume
+                    }
+                    val avgVolume = volSum / smaPeriod
+                    
+                    if (avgVolume > 0) {
+                        val relVol = history[i].volume.toDouble() / avgVolume
+                        
+                        if (relVol > volumeMultiplier) {
+                            val daysAgo = currentIdx - i
+                            val decayedScore = relVol * Math.pow(0.8, daysAgo.toDouble())
+                            if (decayedScore > maxDecayedRelVol) {
+                                maxDecayedRelVol = decayedScore
+                            }
+                        }
+                    }
+                }
+
+                // Score: Highest Decayed Relative Volume Multiplier in the window
+                if (maxDecayedRelVol > 0.0) {
+                    scored.add(symbol to maxDecayedRelVol)
+                }
             }
         }
 

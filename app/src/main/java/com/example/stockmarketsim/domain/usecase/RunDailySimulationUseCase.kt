@@ -78,14 +78,17 @@ class RunDailySimulationUseCase @Inject constructor(
         // Data coverage report — surfaces history failures to the sim log
         val failedHistorySymbols = universe.filter { it !in marketData }
         if (failedHistorySymbols.isNotEmpty()) {
-            val preview = failedHistorySymbols.take(5).joinToString()
-            val more = if (failedHistorySymbols.size > 5) " …and ${failedHistorySymbols.size - 5} more" else ""
+            val preview = failedHistorySymbols.joinToString()
             logManager.logToAll(activeIds,
-                "⚠️ No price history for ${failedHistorySymbols.size} symbols: $preview$more — excluded from analysis.")
+                "⚠️ No price history for ${failedHistorySymbols.size} symbols: $preview — excluded from analysis.")
         }
         val coveragePct = if (universe.isNotEmpty()) marketData.size * 100 / universe.size else 0
+        val firstHist = marketData.values.firstOrNull()
+        val mSdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val mStart = firstHist?.firstOrNull()?.date?.let { mSdf.format(java.util.Date(it)) } ?: "N/A"
+        val mEnd = firstHist?.lastOrNull()?.date?.let { mSdf.format(java.util.Date(it)) } ?: "N/A"
         logManager.logToAll(activeIds,
-            "📈 Market data ready: ${marketData.size}/${universe.size} symbols ($coveragePct% coverage).")
+            "📈 Market data ready: ${marketData.size}/${universe.size} symbols ($coveragePct% coverage). [Period: $mStart → $mEnd]")
 
         val benchmarkSymbol = StockUniverse.BENCHMARK_INDEX // "^NSEI"
         val benchmarkHistory = stockRepository.getStockHistory(benchmarkSymbol, TimeFrame.DAILY, 365)
@@ -144,15 +147,16 @@ class RunDailySimulationUseCase @Inject constructor(
             }
             val (passed, rejected) = qualityFilter.filterWithReasons(universe, fundamentals)
             // KPI 3: Quality Filter Rejection Audit
+            val passedPreview = passed.joinToString(", ")
             if (rejected.isEmpty()) {
-                logManager.logToAll(activeIds, "🧹 Fundamental Quality Filter: All ${passed.size} stocks passed (ROE≥12%, D/E≤1.0, Promoter<72%).")
+                logManager.logToAll(activeIds, "🧹 Fundamental Quality Filter: All ${passed.size} stocks passed (ROE≥12%, D/E≤1.0, Promoter<72%).\n   ✅ Passed: $passedPreview")
             } else {
-                val preview = rejected.take(10).joinToString("\n      ")
-                val more = if (rejected.size > 10) "\n      ...and ${rejected.size - 10} more" else ""
+                val preview = rejected.joinToString("\n      ")
                 logManager.logToAll(activeIds, """🧹 Fundamental Quality Filter (${universe.size} → ${passed.size} passed, ${rejected.size} rejected):
    ✅ ${passed.size} stocks passed quality gate (ROE≥12%, D/E≤1.0, Promoter<72%)
+   ✅ Passed: $passedPreview
    ❌ Rejected:
-      $preview$more""")
+      $preview""")
             }
             qualityPassedUniverse = passed
         }
@@ -322,6 +326,22 @@ class RunDailySimulationUseCase @Inject constructor(
                 if (allocs.isEmpty()) {
                     logManager.log(sim.id, "⚠️ Strategy returned 0 allocations. (Check Strategy Logic)")
                 } else {
+                    // Log Dynamic Volatility Scaling Actions
+                    val baseAllocation = if (isBearMarket) 0.05 else 0.10
+                    for ((sym, weight) in allocs.entries.sortedByDescending { it.value }) {
+                        if (weight > baseAllocation + 0.01 && !isBearMarket) {
+                            val hist = marketData[sym] ?: emptyList()
+                            val lastClose = hist.lastOrNull()?.close ?: 0.0
+                            val atr = RiskEngine.calculateATR(hist, 14)
+                            val atrPct = if (lastClose > 0 && atr > 0) atr / lastClose else 0.05
+                            val cap = if (atrPct < 0.025) 0.20 else if (atrPct < 0.045) 0.15 else 0.10
+                            val type = if (cap >= 0.20) "Steady Giant" else if (cap >= 0.15) "Standard" else "Wildcard"
+                            val isCapped = weight >= cap - 0.001
+                            val capNotice = if (isCapped) " (Max Cap)" else ""
+                            logManager.log(sim.id, "⚖️ Volatility Scaling (Cash Drag Mitigated): $sym [$type] scaled to ${"%.1f".format(weight * 100)}%$capNotice")
+                        }
+                    }
+
                     // KPI 4: Stock Selection Scorecard — sector heat + per-stock signal/ATR%/₹
                     val totalPortfolioValForLog = portfolio.sumOf {
                         (stockRepository.getStockQuote(it.symbol)?.close ?: it.averagePrice) * it.quantity
@@ -337,7 +357,7 @@ class RunDailySimulationUseCase @Inject constructor(
                         }
                     val pickHeader = "%-16s %8s %10s %6s %10s".format("Symbol", "Weight", "ATR%", "Price", "Alloc ₹")
                     val pickDivider = "─".repeat(pickHeader.length)
-                    val pickRows = allocs.entries.sortedByDescending { it.value }.take(15)
+                    val pickRows = allocs.entries.sortedByDescending { it.value }
                         .joinToString("\n   ") { (sym, w) ->
                             val hist = marketData[sym] ?: emptyList()
                             val lastClose = hist.lastOrNull()?.close ?: 0.0
