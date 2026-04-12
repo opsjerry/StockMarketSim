@@ -1,5 +1,5 @@
 {
-  "version": "20260410.32",
-  "download_url": "https://github.com/opsjerry/StockMarketSim/releases/download/v20260410.32/stock_model.tflite",
-  "sha256": "c639db5606df48055278328db128a15699679bb7c8dc22fe1865eedb5ac8dda5"
+  "version": "20260412.33",
+  "download_url": "https://github.com/opsjerry/StockMarketSim/releases/download/v20260412.33/stock_model.tflite",
+  "sha256": "e6320a0596ac97ace1790e215c59f5db554c3bad34b71f3ecf511a1ad93db48b"
 }
